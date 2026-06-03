@@ -1,0 +1,98 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #0f1115;
+  color: #e6e6e6;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #23262e;
+  align-items: center;
+}
+
+.topbar input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #2a2e38;
+  background: #181b21;
+  color: #e6e6e6;
+  font-size: 14px;
+}
+
+.topbar button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #4f7cff;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.topbar button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.status {
+  font-size: 13px;
+  color: #9aa0ac;
+  min-width: 120px;
+}
+
+.canvas {
+  flex: 1;
+  overflow: hidden;
+}
+
+.node-card rect {
+  fill: #181b21;
+  stroke: #2a2e38;
+  stroke-width: 1.5;
+  rx: 8;
+}
+
+.node-card.searching rect {
+  stroke: #f0b429;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.node-card.done rect {
+  stroke: #3fb950;
+}
+
+@keyframes pulse {
+  0%, 100% { stroke-opacity: 1; }
+  50% { stroke-opacity: 0.3; }
+}
+
+.node-label {
+  fill: #e6e6e6;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.node-insight {
+  fill: #9aa0ac;
+  font-size: 11px;
+}
+
+.link {
+  fill: none;
+  stroke: #2a2e38;
+  stroke-width: 1.5;
+}

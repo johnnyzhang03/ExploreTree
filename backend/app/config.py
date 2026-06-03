@@ -6,7 +6,11 @@ class Settings(BaseSettings):
 
     bing_search_key: str = ""
     bing_search_endpoint: str = "https://api.bing.microsoft.com/v7.0/search"
-    anthropic_api_key: str = ""
+
+    openai_api_key: str = ""
+    openai_base_url: str = ""
+    openai_planner_model: str = "gpt-4o"
+    openai_synth_model: str = "gpt-4o-mini"
 
 
 settings = Settings()

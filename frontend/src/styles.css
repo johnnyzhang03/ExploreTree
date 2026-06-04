@@ -4,9 +4,9 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #0f1115;
-  color: #e6e6e6;
+  font-family: arial, system-ui, -apple-system, sans-serif;
+  background: #ffffff;
+  color: #202124;
 }
 
 .app {
@@ -15,64 +15,137 @@ body {
   height: 100vh;
 }
 
-.topbar {
-  display: flex;
-  gap: 8px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #23262e;
+/* ---- Home (centered, Google-style) ---- */
+.app.home {
   align-items: center;
+  justify-content: center;
 }
 
-.topbar input {
+.home-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  width: 100%;
+  max-width: 620px;
+  padding: 0 24px;
+  margin-top: -8vh;
+}
+
+.brand {
+  font-size: 64px;
+  font-weight: 500;
+  letter-spacing: -1px;
+  margin: 0;
+  color: #202124;
+}
+
+.brand-sm {
+  font-size: 20px;
+  font-weight: 500;
+  color: #202124;
+  white-space: nowrap;
+}
+
+/* ---- Search pill ---- */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 620px;
+  padding: 6px 8px 6px 16px;
+  border: 1px solid #dfe1e5;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 1px 6px rgba(32, 33, 36, 0.12);
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.search:focus-within {
+  box-shadow: 0 1px 10px rgba(32, 33, 36, 0.22);
+  border-color: transparent;
+}
+
+.search-icon {
+  color: #9aa0a6;
+  flex-shrink: 0;
+}
+
+.search input {
   flex: 1;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid #2a2e38;
-  background: #181b21;
-  color: #e6e6e6;
-  font-size: 14px;
-}
-
-.topbar button {
-  padding: 8px 16px;
-  border-radius: 6px;
   border: none;
-  background: #4f7cff;
-  color: white;
-  font-size: 14px;
-  cursor: pointer;
+  outline: none;
+  background: transparent;
+  font-size: 17px;
+  color: #202124;
+  padding: 10px 4px;
 }
 
-.topbar button:disabled {
-  opacity: 0.5;
+.search button {
+  padding: 10px 22px;
+  border-radius: 22px;
+  border: none;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.search button:hover {
+  background: #1765cc;
+}
+
+.search button:disabled {
+  background: #c6d4f0;
   cursor: default;
 }
 
+/* ---- Topbar (after exploring) ---- */
+.topbar {
+  display: flex;
+  gap: 20px;
+  padding: 14px 24px;
+  border-bottom: 1px solid #ebebeb;
+  align-items: center;
+}
+
+.topbar .search {
+  max-width: 560px;
+  box-shadow: 0 1px 4px rgba(32, 33, 36, 0.1);
+}
+
 .status {
-  font-size: 13px;
-  color: #9aa0ac;
-  min-width: 120px;
+  font-size: 14px;
+  color: #5f6368;
+  min-width: 90px;
 }
 
 .canvas {
   flex: 1;
   overflow: hidden;
+  background: #fafafa;
 }
 
+/* ---- Tree nodes ---- */
 .node-card rect {
-  fill: #181b21;
-  stroke: #2a2e38;
+  fill: #ffffff;
+  stroke: #dfe1e5;
   stroke-width: 1.5;
-  rx: 8;
+  filter: drop-shadow(0 1px 3px rgba(32, 33, 36, 0.12));
+  transition: stroke 0.3s ease;
 }
 
 .node-card.searching rect {
-  stroke: #f0b429;
-  animation: pulse 1s ease-in-out infinite;
+  stroke: #f9ab00;
+  animation: pulse 1.1s ease-in-out infinite;
 }
 
 .node-card.done rect {
-  stroke: #3fb950;
+  stroke: #1a73e8;
 }
 
 @keyframes pulse {
@@ -81,18 +154,18 @@ body {
 }
 
 .node-label {
-  fill: #e6e6e6;
-  font-size: 13px;
+  fill: #202124;
+  font-size: 17px;
   font-weight: 600;
 }
 
 .node-insight {
-  fill: #9aa0ac;
-  font-size: 11px;
+  fill: #5f6368;
+  font-size: 14px;
 }
 
 .link {
   fill: none;
-  stroke: #2a2e38;
+  stroke: #dadce0;
   stroke-width: 1.5;
 }

@@ -33,6 +33,15 @@ _SYNTH_SYSTEM = (
     "cite numbers or named entities when present. Do not speculate beyond the snippets."
 )
 
+_REFLECT_SYSTEM = (
+    "You steer ExploreTree's exploration. Given the root question and the current "
+    "frontier of leaf nodes (each with an id, label, and the insight found so far), "
+    "pick the nodes whose deeper expansion would best fill the biggest remaining "
+    "information gaps toward answering the root question. Return only the chosen ids, "
+    "ordered by priority. Choose nodes that are substantive and under-explored; skip "
+    "nodes that are already well-answered or tangential."
+)
+
 
 class Decomposition(BaseModel):
     subtopics: list[str] = Field(min_length=1, max_length=5)
@@ -42,12 +51,18 @@ class Insight(BaseModel):
     insight: str
 
 
+class Expansion(BaseModel):
+    node_ids: list[str] = Field(default_factory=list)
+
+
 def _client() -> AsyncOpenAI | None:
     if not (settings.openai_api_key and settings.openai_base_url):
         return None
     return AsyncOpenAI(
         api_key=settings.openai_api_key,
         base_url=settings.openai_base_url,
+        timeout=settings.openai_timeout,
+        max_retries=0,
     )
 
 
@@ -62,6 +77,7 @@ async def plan(question: str) -> list[str]:
         instructions=_PLANNER_SYSTEM,
         input=f"Question: {question}",
         text_format=Decomposition,
+        reasoning={"effort": settings.openai_planner_effort},
     )
     parsed = response.output_parsed
     return list(parsed.subtopics) if parsed else []
@@ -82,3 +98,26 @@ async def synthesize(subtopic: str, snippets: list[str]) -> str:
     )
     parsed = response.output_parsed
     return parsed.insight if parsed else ""
+
+
+async def reflect(question: str, frontier: list[dict], limit: int) -> list[str]:
+    """Pick up to `limit` frontier node ids to expand next. Returns [] if no LLM."""
+    client = _client()
+    if client is None or not frontier:
+        return []
+
+    listing = "\n".join(
+        f"- id={n['id']} | {n['label']} | insight: {n.get('insight') or '(none)'}"
+        for n in frontier
+    )
+    response = await client.responses.parse(
+        model=PLANNER_MODEL,
+        instructions=f"{_REFLECT_SYSTEM} Pick at most {limit} ids.",
+        input=f"Root question: {question}\n\nFrontier nodes:\n{listing}",
+        text_format=Expansion,
+        reasoning={"effort": settings.openai_planner_effort},
+    )
+    parsed = response.output_parsed
+    valid = {n["id"] for n in frontier}
+    ids = [i for i in (parsed.node_ids if parsed else []) if i in valid]
+    return ids[:limit]

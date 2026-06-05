@@ -22,33 +22,45 @@ function wrap(text, width, lineHeight, maxLines) {
     const full = node.attr("data-text") || "";
     if (node.attr("data-wrapped") === full) return; // already wrapped this text
     node.attr("data-wrapped", full);
-    const words = full.split(/\s+/);
-    let line = [];
-    let lineNum = 0;
     const y = node.attr("y");
     const x = node.attr("x");
     node.text(null);
+
+    // Tokenize so it works for both space-separated (latin) and CJK text:
+    // keep runs of non-space as atoms, but allow breaking between CJK chars.
+    const tokens = full.match(/\s+|[一-鿿　-〿＀-￯]|[^\s一-鿿　-〿＀-￯]+/g) || [];
+
+    let lineNum = 0;
+    let cur = "";
     let tspan = node.append("tspan").attr("x", x).attr("y", y).attr("dy", "0px");
-    for (const word of words) {
-      line.push(word);
-      tspan.text(line.join(" "));
-      if (tspan.node().getComputedTextLength() > width && line.length > 1) {
-        line.pop();
-        tspan.text(line.join(" "));
-        line = [word];
-        if (lineNum >= maxLines - 1) {
-          tspan.text(tspan.text() + " …");
-          break;
-        }
-        lineNum += 1;
-        tspan = node
-          .append("tspan")
-          .attr("x", x)
-          .attr("y", y)
-          .attr("dy", `${lineNum * lineHeight}px`)
-          .text(word);
+
+    const fits = (s) => {
+      tspan.text(s);
+      return tspan.node().getComputedTextLength() <= width;
+    };
+
+    for (const tok of tokens) {
+      const candidate = cur + tok;
+      if (fits(candidate) || cur === "") {
+        cur = candidate;
+        continue;
       }
+      // candidate overflows: commit `cur` to this line, move `tok` to the next
+      tspan.text(cur.replace(/\s+$/, ""));
+      if (lineNum >= maxLines - 1) {
+        tspan.text(cur.replace(/\s+$/, "") + "…");
+        return;
+      }
+      lineNum += 1;
+      cur = tok.match(/^\s+$/) ? "" : tok; // don't start a line with whitespace
+      tspan = node
+        .append("tspan")
+        .attr("x", x)
+        .attr("y", y)
+        .attr("dy", `${lineNum * lineHeight}px`)
+        .text(cur);
     }
+    tspan.text(cur.replace(/\s+$/, ""));
   });
 }
 
@@ -136,12 +148,32 @@ export default function Tree({ nodes }) {
               return `translate(${s.x - NODE_W / 2}, ${s.y})`;
             });
 
+          // clip content to the card so text can never spill past the border
+          ge.append("clipPath")
+            .attr("id", (d) => `clip-${d.data.id}`)
+            .append("rect")
+            .attr("width", NODE_W)
+            .attr("height", NODE_H)
+            .attr("rx", 12);
+
           ge.append("rect")
             .attr("width", NODE_W)
             .attr("height", NODE_H)
             .attr("rx", 12);
-          ge.append("text").attr("class", "node-label");
-          ge.append("text").attr("class", "node-insight");
+          ge.append("title"); // native hover tooltip (source list)
+
+          const content = ge
+            .append("g")
+            .attr("class", "node-content")
+            .attr("clip-path", (d) => `url(#clip-${d.data.id})`);
+          content
+            .append("a")
+            .attr("class", "node-label-link")
+            .attr("target", "_blank")
+            .attr("rel", "noopener noreferrer")
+            .append("text")
+            .attr("class", "node-label");
+          content.append("text").attr("class", "node-insight");
 
           ge.transition(T())
             .attr("opacity", 1)
@@ -164,21 +196,39 @@ export default function Tree({ nodes }) {
     // status class + text refresh on every render (enter and update)
     node.attr("class", (d) => `node-card ${d.data.status}`);
 
+    // hover tooltip: list all sources for this node
+    node.select("title").text((d) => {
+      const srcs = d.data.sources || [];
+      if (!srcs.length) return d.data.label;
+      return srcs
+        .map((s) => `[${s.vertical || "web"}] ${s.title || s.url}`)
+        .join("\n");
+    });
+
+    // title links to the node's top source (if any); plain text otherwise
+    node
+      .select("a.node-label-link")
+      .attr("href", (d) => (d.data.sources && d.data.sources[0]?.url) || null)
+      .classed("has-link", (d) => !!(d.data.sources && d.data.sources[0]?.url));
+
+    const isRoot = (d) => d.data.depth === 0;
+
     node
       .select("text.node-label")
-      .attr("x", PAD)
-      .attr("y", PAD + 14)
+      .attr("text-anchor", (d) => (isRoot(d) ? "middle" : "start"))
+      .attr("x", (d) => (isRoot(d) ? NODE_W / 2 : PAD))
+      .attr("y", (d) => (isRoot(d) ? NODE_H / 2 - 14 : PAD + 14))
       .attr("data-text", (d) => d.data.label)
       .call(wrap, NODE_W - PAD * 2, 24, 2);
 
     node
       .select("text.node-insight")
       .attr("x", PAD)
-      .attr("y", PAD + 64)
+      .attr("y", PAD + 60)
       .attr("data-text", (d) =>
-        d.data.status === "searching" ? "searching…" : d.data.insight
+        isRoot(d) ? "" : d.data.status === "searching" ? "searching…" : d.data.insight
       )
-      .call(wrap, NODE_W - PAD * 2, 20, 4);
+      .call(wrap, NODE_W - PAD * 2, 20, 3);
 
     // remember positions for the next render's grow-from-parent
     const next = new Map();

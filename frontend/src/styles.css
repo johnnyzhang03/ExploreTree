@@ -159,6 +159,18 @@ body {
   font-weight: 600;
 }
 
+a.node-label-link.has-link {
+  cursor: pointer;
+}
+
+a.node-label-link.has-link .node-label {
+  fill: #1a73e8;
+}
+
+a.node-label-link.has-link:hover .node-label {
+  text-decoration: underline;
+}
+
 .node-insight {
   fill: #5f6368;
   font-size: 14px;

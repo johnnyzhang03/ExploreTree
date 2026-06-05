@@ -3,6 +3,29 @@ import Tree from "./Tree.jsx";
 
 const WS_URL = "ws://localhost:8000/ws";
 
+function SearchBar({ autoFocus, question, setQuestion, ask, disabled }) {
+  return (
+    <div className="search">
+      <svg className="search-icon" viewBox="0 0 24 24" width="20" height="20">
+        <path
+          fill="currentColor"
+          d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0A4.5 4.5 0 1 1 14 9.5 4.49 4.49 0 0 1 9.5 14Z"
+        />
+      </svg>
+      <input
+        autoFocus={autoFocus}
+        value={question}
+        onChange={(e) => setQuestion(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && ask()}
+        placeholder="Ask a complex question…"
+      />
+      <button onClick={ask} disabled={disabled}>
+        Explore
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   const [question, setQuestion] = useState(
     "Is it worth opening a bubble tea shop in Singapore?"
@@ -22,9 +45,9 @@ export default function App() {
       if (msg.type === "node_added" || msg.type === "node_updated") {
         setNodes((prev) => ({ ...prev, [msg.node.id]: msg.node }));
       } else if (msg.type === "planning") {
-        setStatus("planning…");
+        setStatus("Planning…");
       } else if (msg.type === "done") {
-        setStatus("done");
+        setStatus("Done");
       }
     };
     return () => ws.close();
@@ -39,33 +62,18 @@ export default function App() {
     wsRef.current.send(JSON.stringify({ type: "ask", question }));
   };
 
-  const SearchBar = ({ autoFocus }) => (
-    <div className="search">
-      <svg className="search-icon" viewBox="0 0 24 24" width="20" height="20">
-        <path
-          fill="currentColor"
-          d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0A4.5 4.5 0 1 1 14 9.5 4.49 4.49 0 0 1 9.5 14Z"
-        />
-      </svg>
-      <input
-        autoFocus={autoFocus}
-        value={question}
-        onChange={(e) => setQuestion(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && ask()}
-        placeholder="Ask a complex question…"
-      />
-      <button onClick={ask} disabled={status === "disconnected"}>
-        Explore
-      </button>
-    </div>
-  );
-
   if (!started) {
     return (
       <div className="app home">
         <div className="home-inner">
           <h1 className="brand">ExploreTree</h1>
-          <SearchBar autoFocus />
+          <SearchBar
+            autoFocus
+            question={question}
+            setQuestion={setQuestion}
+            ask={ask}
+            disabled={status === "disconnected"}
+          />
         </div>
       </div>
     );
@@ -75,7 +83,12 @@ export default function App() {
     <div className="app">
       <div className="topbar">
         <span className="brand-sm">ExploreTree</span>
-        <SearchBar />
+        <SearchBar
+          question={question}
+          setQuestion={setQuestion}
+          ask={ask}
+          disabled={status === "disconnected"}
+        />
         <span className="status">{status}</span>
       </div>
       <div className="canvas">
@@ -84,3 +97,4 @@ export default function App() {
     </div>
   );
 }
+

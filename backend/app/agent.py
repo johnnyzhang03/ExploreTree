@@ -1,34 +1,39 @@
-"""Week-3 agent: LLM planner decomposes, multi-vertical searcher fetches, LLM
-synthesizer distills, and an LLM reflection step grows the tree level by level.
+"""Week-3 agent: LLM planner decomposes + routes verticals, multi-vertical searcher
+fetches, LLM synthesizer distills, and an LLM reflection step grows the tree level
+by level.
 
-Each round: expand the new frontier in parallel (web + news search → synthesize),
-then ask the reflector which leaves to expand next. Bounded by settings.max_depth.
-All LLM steps fall back to Week-1 heuristics when no key is configured, so the
-vertical slice always runs end-to-end.
+Each round: expand the new frontier in parallel (the planner-chosen verticals per
+node → synthesize), then ask the reflector which leaves to expand next. Bounded by
+settings.max_depth. All LLM steps fall back to Week-1 heuristics when no key is
+configured, so the vertical slice always runs end-to-end.
 """
 import asyncio
 from typing import Awaitable, Callable
 
 from . import llm
 from .config import settings
-from .search import search_news, search_web
+from .llm import PlannedTopic
+from .search import SEARCHERS
 from .tree import Node, Tree
 
 Emit = Callable[[dict], Awaitable[None]]
 
+# How many results to pull per vertical (kept small to bound latency/cost).
+_VERTICAL_COUNTS = {"web": 4, "news": 3, "finance": 2, "places": 3}
 
-def _fallback_decompose(question: str) -> list[str]:
+
+def _fallback_decompose(question: str) -> list[PlannedTopic]:
     """Week-1 stand-in used when the LLM planner is unavailable."""
     q = question.strip().rstrip("?")
     return [
-        f"{q} — overview",
-        f"{q} — key factors",
-        f"{q} — risks and challenges",
+        PlannedTopic(query=f"{q} — overview", verticals=["web", "news"]),
+        PlannedTopic(query=f"{q} — key factors", verticals=["web", "news"]),
+        PlannedTopic(query=f"{q} — risks and challenges", verticals=["web", "news"]),
     ]
 
 
-async def decompose(question: str) -> list[str]:
-    """Plan sub-topics via the LLM, falling back to the template on empty/no-key."""
+async def decompose(question: str) -> list[PlannedTopic]:
+    """Plan sub-topics (with routed verticals) via the LLM, falling back to template."""
     try:
         subtopics = await llm.plan(question)
     except Exception:  # boundary: LLM API — never let planning kill the run
@@ -41,20 +46,22 @@ async def _expand_node(tree: Tree, node_id: str, emit: Emit) -> None:
     node.status = "searching"
     await emit({"type": "node_updated", "node": node.to_dict()})
 
-    web, news = await asyncio.gather(
-        search_web(node.label, count=4),
-        search_news(node.label, count=3),
-        return_exceptions=True,
-    )
+    verticals = node.verticals or ["web", "news"]
+    searches = [
+        SEARCHERS[v](node.label, count=_VERTICAL_COUNTS.get(v, 3))
+        for v in verticals
+        if v in SEARCHERS
+    ]
+    groups = await asyncio.gather(*searches, return_exceptions=True)
     results = []
-    for group in (web, news):
+    for group in groups:
         if isinstance(group, BaseException):
             continue
         results.extend(group)
 
     if not results:
         node.status = "done"
-        exc = next((g for g in (web, news) if isinstance(g, BaseException)), None)
+        exc = next((g for g in groups if isinstance(g, BaseException)), None)
         node.insight = f"(search failed: {exc})" if exc else "(no results)"
         await emit({"type": "node_updated", "node": node.to_dict()})
         return
@@ -76,8 +83,13 @@ async def _expand_node(tree: Tree, node_id: str, emit: Emit) -> None:
 async def _grow_children(tree: Tree, parent: Node, emit: Emit) -> list[Node]:
     """Decompose a parent into children, emit them, and expand all in parallel."""
     children = [
-        tree.add(label=sub, parent_id=parent.id, depth=parent.depth + 1)
-        for sub in await decompose(parent.label)
+        tree.add(
+            label=topic.query,
+            parent_id=parent.id,
+            depth=parent.depth + 1,
+            verticals=topic.verticals,
+        )
+        for topic in await decompose(parent.label)
     ]
     for child in children:
         await emit({"type": "node_added", "node": child.to_dict()})

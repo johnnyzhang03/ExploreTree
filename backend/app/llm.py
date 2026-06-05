@@ -18,13 +18,30 @@ from .config import settings
 PLANNER_MODEL = settings.openai_planner_model
 SYNTH_MODEL = settings.openai_synth_model
 
+ALLOWED_VERTICALS = {"web", "news", "finance", "places"}
+
 _PLANNER_SYSTEM = (
     "You are the planner for ExploreTree, a research agent that grows a knowledge "
     "tree. Given a complex question, decompose it into 3 distinct, non-overlapping "
     "sub-topics that together cover the question. Each sub-topic must be a concise, "
     "self-contained search query (not a sentence, no trailing punctuation). Avoid "
-    "generic labels like 'overview' — make each one substantive and searchable."
+    "generic labels like 'overview' — make each one substantive and searchable.\n\n"
+    "For each sub-topic, also choose which search verticals best fit it, from this "
+    "set: 'web' (general background — ALWAYS include), 'news' (current events, recent "
+    "developments, trends), 'finance' (company financials, stock/market data, "
+    "revenue, valuation, profitability, startup costs, unit economics), 'places' "
+    "(physical locations, venues, addresses, local businesses, competitors by "
+    "location, rents, foot traffic). Include 'finance' whenever a sub-topic touches "
+    "money/market/profitability dimensions, and 'places' whenever it touches physical "
+    "location or local competition — but do not add them to sub-topics that are purely "
+    "about general concepts, consumer sentiment, or background."
 )
+
+
+class PlannedTopic(BaseModel):
+    query: str
+    verticals: list[str] = Field(default_factory=lambda: ["web"])
+
 
 _SYNTH_SYSTEM = (
     "You are the synthesizer for ExploreTree. Given a sub-topic and a list of web "
@@ -44,7 +61,7 @@ _REFLECT_SYSTEM = (
 
 
 class Decomposition(BaseModel):
-    subtopics: list[str] = Field(min_length=1, max_length=5)
+    subtopics: list[PlannedTopic] = Field(min_length=1, max_length=5)
 
 
 class Insight(BaseModel):
@@ -66,8 +83,8 @@ def _client() -> AsyncOpenAI | None:
     )
 
 
-async def plan(question: str) -> list[str]:
-    """Decompose a question into sub-topics. Returns [] if no LLM is configured."""
+async def plan(question: str) -> list[PlannedTopic]:
+    """Decompose a question into sub-topics with routed verticals. [] if no LLM."""
     client = _client()
     if client is None:
         return []
@@ -80,7 +97,16 @@ async def plan(question: str) -> list[str]:
         reasoning={"effort": settings.openai_planner_effort},
     )
     parsed = response.output_parsed
-    return list(parsed.subtopics) if parsed else []
+    if not parsed:
+        return []
+
+    topics = []
+    for t in parsed.subtopics:
+        verts = [v for v in dict.fromkeys(t.verticals) if v in ALLOWED_VERTICALS]
+        if "web" not in verts:
+            verts.insert(0, "web")
+        topics.append(PlannedTopic(query=t.query, verticals=verts))
+    return topics
 
 
 async def synthesize(subtopic: str, snippets: list[str]) -> str:

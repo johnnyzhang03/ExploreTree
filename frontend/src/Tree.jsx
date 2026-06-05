@@ -107,10 +107,16 @@ export default function Tree({ nodes }) {
       const p = d.parent && prev.get(d.parent.data.id);
       return p || prev.get(d.data.id) || { x: d.x, y: d.y };
     };
+    // Links run from the parent's bottom edge to the child's top edge.
     const linkGen = d3
       .linkVertical()
-      .x((d) => d.x)
-      .y((d) => d.y);
+      .x((p) => p.x)
+      .y((p) => p.y);
+    const linkPath = (s, t) =>
+      linkGen({
+        source: { x: s.x, y: s.y + NODE_H },
+        target: { x: t.x, y: t.y },
+      });
 
     // ---- Links ----
     g.selectAll("path.link")
@@ -123,12 +129,21 @@ export default function Tree({ nodes }) {
             .attr("opacity", 0)
             .attr("d", (d) => {
               const s = startOf(d.target);
-              return linkGen({ source: s, target: s });
+              return linkPath(s, s);
             })
-            .call((e) => e.transition(T()).attr("opacity", 1).attr("d", linkGen)),
+            .call((e) =>
+              e
+                .transition(T())
+                .attr("opacity", 1)
+                .attr("d", (d) => linkPath(d.source, d.target))
+            ),
         (update) =>
           update.call((u) =>
-            u.interrupt().transition(T()).attr("opacity", 1).attr("d", linkGen)
+            u
+              .interrupt()
+              .transition(T())
+              .attr("opacity", 1)
+              .attr("d", (d) => linkPath(d.source, d.target))
           ),
         (exit) => exit.call((x) => x.transition(T()).attr("opacity", 0).remove())
       );

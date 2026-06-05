@@ -128,10 +128,130 @@ body {
   flex: 1;
   overflow: hidden;
   background: #fafafa;
+  position: relative;
 }
 
+/* ---- Detail side panel ---- */
+.panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 380px;
+  max-width: 90vw;
+  height: 100%;
+  background: #ffffff;
+  border-left: 1px solid #e0e0e0;
+  box-shadow: -4px 0 16px rgba(32, 33, 36, 0.12);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #ebebeb;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #202124;
+  line-height: 1.35;
+  flex: 1;
+}
+
+.panel-close {
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  line-height: 1;
+  color: #5f6368;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.panel-close:hover {
+  color: #202124;
+}
+
+.panel-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+.panel-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #80868b;
+  margin: 18px 0 8px;
+}
+.panel-section-label:first-child {
+  margin-top: 0;
+}
+
+.panel-insight {
+  font-size: 15px;
+  line-height: 1.55;
+  color: #202124;
+  margin: 0;
+}
+
+.panel-empty {
+  font-size: 14px;
+  color: #80868b;
+  margin: 0;
+}
+
+.panel-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.panel-sources li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f3f4;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.panel-sources a {
+  color: #1a73e8;
+  text-decoration: none;
+  word-break: break-word;
+}
+.panel-sources a:hover {
+  text-decoration: underline;
+}
+
+.src-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 9px;
+}
+.src-web { background: #1a73e8; }
+.src-news { background: #d93025; }
+.src-finance { background: #188038; }
+.src-places { background: #e8710a; }
+
 /* ---- Tree nodes ---- */
-.node-card rect {
+.node-card {
+  cursor: pointer;
+}
+
+.node-card .card-bg {
   fill: #ffffff;
   stroke: #dfe1e5;
   stroke-width: 1.5;
@@ -139,13 +259,30 @@ body {
   transition: stroke 0.3s ease;
 }
 
-.node-card.searching rect {
+.node-card.searching .card-bg {
   stroke: #f9ab00;
   animation: pulse 1.1s ease-in-out infinite;
 }
 
-.node-card.done rect {
+.node-card.done .card-bg {
   stroke: #1a73e8;
+}
+
+.node-card.selected .card-bg,
+.node-card.selected.done .card-bg,
+.node-card.selected.searching .card-bg {
+  stroke: #1a73e8;
+  stroke-width: 3;
+  animation: none;
+}
+
+.card-header {
+  fill: #f8f9fa;
+}
+
+.card-divider {
+  stroke: #ebebeb;
+  stroke-width: 1;
 }
 
 @keyframes pulse {
@@ -154,26 +291,21 @@ body {
 }
 
 .node-label {
-  fill: #202124;
-  font-size: 17px;
-  font-weight: 600;
-}
-
-a.node-label-link.has-link {
-  cursor: pointer;
-}
-
-a.node-label-link.has-link .node-label {
-  fill: #1a73e8;
-}
-
-a.node-label-link.has-link:hover .node-label {
-  text-decoration: underline;
+  fill: #1f1f1f;
+  font-size: 16px;
+  font-weight: 550;
+  letter-spacing: -0.2px;
 }
 
 .node-insight {
   fill: #5f6368;
   font-size: 14px;
+}
+
+.badge-text {
+  fill: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .link {

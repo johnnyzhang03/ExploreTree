@@ -65,15 +65,35 @@ function wrap(text, width, lineHeight, maxLines) {
 }
 
 const NODE_W = 320;
-const NODE_H = 150;
+const NODE_H = 172;
 const PAD = 18;
+const HEADER_H = 64; // colored header band height
 
-export default function Tree({ nodes }) {
+// Per-vertical badge metadata: short label + accent color.
+const VERTICALS = {
+  web: { label: "Web", color: "#1a73e8" },
+  news: { label: "News", color: "#d93025" },
+  finance: { label: "Finance", color: "#188038" },
+  places: { label: "Places", color: "#e8710a" },
+};
+
+function nodeVerticals(d) {
+  // prefer the verticals that actually produced sources; else the planned set
+  const fromSources = [
+    ...new Set((d.data.sources || []).map((s) => s.vertical).filter(Boolean)),
+  ];
+  const list = fromSources.length ? fromSources : d.data.verticals || [];
+  return list.filter((v) => VERTICALS[v]);
+}
+
+export default function Tree({ nodes, onSelectNode, selectedId }) {
   const svgRef = useRef(null);
   const gRef = useRef(null);
   const zoomRef = useRef(null);
   const posRef = useRef(new Map()); // id -> {x, y} from previous render
   const userMovedRef = useRef(false); // stop auto-fit once the user pans/zooms
+  const selectRef = useRef(onSelectNode);
+  selectRef.current = onSelectNode;
 
   useEffect(() => {
     const root = buildHierarchy(nodes);
@@ -158,37 +178,55 @@ export default function Tree({ nodes }) {
             .append("g")
             .attr("class", (d) => `node-card ${d.data.status}`)
             .attr("opacity", 0)
+            .style("cursor", "pointer")
+            .on("click", (event, d) => {
+              event.stopPropagation();
+              selectRef.current && selectRef.current(d.data.id);
+            })
             .attr("transform", (d) => {
               const s = startOf(d);
               return `translate(${s.x - NODE_W / 2}, ${s.y})`;
             });
 
-          // clip content to the card so text can never spill past the border
+          // clip content just inside the card stroke so the rounded border
+          // stays fully visible (header band must not paint over it)
           ge.append("clipPath")
             .attr("id", (d) => `clip-${d.data.id}`)
             .append("rect")
-            .attr("width", NODE_W)
-            .attr("height", NODE_H)
-            .attr("rx", 12);
+            .attr("x", 1.5)
+            .attr("y", 1.5)
+            .attr("width", NODE_W - 3)
+            .attr("height", NODE_H - 3)
+            .attr("rx", 10.5);
 
           ge.append("rect")
+            .attr("class", "card-bg")
             .attr("width", NODE_W)
             .attr("height", NODE_H)
             .attr("rx", 12);
-          ge.append("title"); // native hover tooltip (source list)
 
           const content = ge
             .append("g")
             .attr("class", "node-content")
             .attr("clip-path", (d) => `url(#clip-${d.data.id})`);
+
+          // header band (non-root) + divider line
           content
-            .append("a")
-            .attr("class", "node-label-link")
-            .attr("target", "_blank")
-            .attr("rel", "noopener noreferrer")
-            .append("text")
-            .attr("class", "node-label");
+            .append("rect")
+            .attr("class", "card-header")
+            .attr("width", NODE_W)
+            .attr("height", HEADER_H);
+          content
+            .append("line")
+            .attr("class", "card-divider")
+            .attr("x1", 0)
+            .attr("x2", NODE_W)
+            .attr("y1", HEADER_H)
+            .attr("y2", HEADER_H);
+
+          content.append("text").attr("class", "node-label");
           content.append("text").attr("class", "node-insight");
+          content.append("g").attr("class", "node-badges");
 
           ge.transition(T())
             .attr("opacity", 1)
@@ -209,41 +247,65 @@ export default function Tree({ nodes }) {
       );
 
     // status class + text refresh on every render (enter and update)
-    node.attr("class", (d) => `node-card ${d.data.status}`);
-
-    // hover tooltip: list all sources for this node
-    node.select("title").text((d) => {
-      const srcs = d.data.sources || [];
-      if (!srcs.length) return d.data.label;
-      return srcs
-        .map((s) => `[${s.vertical || "web"}] ${s.title || s.url}`)
-        .join("\n");
-    });
-
-    // title links to the node's top source (if any); plain text otherwise
-    node
-      .select("a.node-label-link")
-      .attr("href", (d) => (d.data.sources && d.data.sources[0]?.url) || null)
-      .classed("has-link", (d) => !!(d.data.sources && d.data.sources[0]?.url));
+    node.attr(
+      "class",
+      (d) =>
+        `node-card ${d.data.status}${d.data.id === selectedId ? " selected" : ""}`
+    );
 
     const isRoot = (d) => d.data.depth === 0;
+
+    // header band + divider hidden for the root (it's a centered title card)
+    node
+      .select("rect.card-header")
+      .attr("display", (d) => (isRoot(d) ? "none" : null));
+    node
+      .select("line.card-divider")
+      .attr("display", (d) => (isRoot(d) ? "none" : null));
 
     node
       .select("text.node-label")
       .attr("text-anchor", (d) => (isRoot(d) ? "middle" : "start"))
       .attr("x", (d) => (isRoot(d) ? NODE_W / 2 : PAD))
-      .attr("y", (d) => (isRoot(d) ? NODE_H / 2 - 14 : PAD + 14))
+      .attr("y", (d) => (isRoot(d) ? NODE_H / 2 - 14 : PAD + 12))
       .attr("data-text", (d) => d.data.label)
-      .call(wrap, NODE_W - PAD * 2, 24, 2);
+      .call(wrap, NODE_W - PAD * 2, 22, 2);
 
     node
       .select("text.node-insight")
       .attr("x", PAD)
-      .attr("y", PAD + 60)
+      .attr("y", HEADER_H + PAD + 6)
       .attr("data-text", (d) =>
         isRoot(d) ? "" : d.data.status === "searching" ? "searching…" : d.data.insight
       )
       .call(wrap, NODE_W - PAD * 2, 20, 3);
+
+    // ---- Vertical badges (bottom row) ----
+    node.select("g.node-badges").each(function (d) {
+      const sel = d3.select(this);
+      sel.selectAll("*").remove();
+      if (isRoot(d)) return;
+      let x = PAD;
+      const y = NODE_H - 26;
+      for (const v of nodeVerticals(d)) {
+        const meta = VERTICALS[v];
+        const g = sel.append("g").attr("transform", `translate(${x}, ${y})`);
+        const text = g
+          .append("text")
+          .attr("class", "badge-text")
+          .attr("x", 8)
+          .attr("y", 12)
+          .text(meta.label);
+        const w = text.node().getComputedTextLength() + 16;
+        g.insert("rect", "text")
+          .attr("class", "badge-bg")
+          .attr("width", w)
+          .attr("height", 18)
+          .attr("rx", 9)
+          .attr("fill", meta.color);
+        x += w + 6;
+      }
+    });
 
     // remember positions for the next render's grow-from-parent
     const next = new Map();

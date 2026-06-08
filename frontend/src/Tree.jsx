@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import * as d3 from "d3";
 
+const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
 function buildHierarchy(nodes) {
   const list = Object.values(nodes);
   const root = list.find((n) => n.parentId === null);
@@ -268,7 +270,7 @@ export default function Tree({ nodes, onSelectNode, selectedId }) {
       .attr("text-anchor", (d) => (isRoot(d) ? "middle" : "start"))
       .attr("x", (d) => (isRoot(d) ? NODE_W / 2 : PAD))
       .attr("y", (d) => (isRoot(d) ? NODE_H / 2 - 14 : PAD + 12))
-      .attr("data-text", (d) => d.data.label)
+      .attr("data-text", (d) => capitalize(d.data.label))
       .call(wrap, NODE_W - PAD * 2, 22, 2);
 
     node

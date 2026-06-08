@@ -3,6 +3,47 @@ import Tree from "./Tree.jsx";
 
 const WS_URL = "ws://localhost:8000/ws";
 
+const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+// Map (depth, breadth) to a human "vibe" label shown next to the sliders.
+function vibeOf(depth, breadth) {
+  const score = depth + breadth;
+  if (score <= 4) return "Quick";
+  if (score <= 6) return "Balanced";
+  return "Deep";
+}
+
+function ScopeControls({ depth, breadth, setDepth, setBreadth }) {
+  const vibe = vibeOf(depth, breadth);
+  return (
+    <div className="scope">
+      <div className="scope-row">
+        <label>Depth</label>
+        <input
+          type="range"
+          min="1"
+          max="4"
+          value={depth}
+          onChange={(e) => setDepth(Number(e.target.value))}
+        />
+        <span className="scope-val">{depth}</span>
+      </div>
+      <div className="scope-row">
+        <label>Breadth</label>
+        <input
+          type="range"
+          min="1"
+          max="4"
+          value={breadth}
+          onChange={(e) => setBreadth(Number(e.target.value))}
+        />
+        <span className="scope-val">{breadth}</span>
+      </div>
+      <div className={`scope-vibe vibe-${vibe.toLowerCase()}`}>{vibe}</div>
+    </div>
+  );
+}
+
 function SearchBar({ autoFocus, question, setQuestion, ask, disabled }) {
   return (
     <div className="search">
@@ -32,7 +73,7 @@ function SidePanel({ node, onClose }) {
   return (
     <aside className="panel">
       <div className="panel-head">
-        <span className="panel-title">{node.label}</span>
+        <span className="panel-title">{capitalize(node.label)}</span>
         <button className="panel-close" onClick={onClose} aria-label="Close">
           ×
         </button>
@@ -79,6 +120,8 @@ export default function App() {
   const [status, setStatus] = useState("disconnected");
   const [started, setStarted] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  const [depth, setDepth] = useState(3);
+  const [breadth, setBreadth] = useState(2);
   const wsRef = useRef(null);
 
   useEffect(() => {
@@ -106,7 +149,9 @@ export default function App() {
     setStarted(true);
     setSelectedId(null);
     setStatus("exploring");
-    wsRef.current.send(JSON.stringify({ type: "ask", question }));
+    wsRef.current.send(
+      JSON.stringify({ type: "ask", question, depth, breadth })
+    );
   };
 
   if (!started) {
@@ -120,6 +165,12 @@ export default function App() {
             setQuestion={setQuestion}
             ask={ask}
             disabled={status === "disconnected"}
+          />
+          <ScopeControls
+            depth={depth}
+            breadth={breadth}
+            setDepth={setDepth}
+            setBreadth={setBreadth}
           />
         </div>
       </div>

@@ -104,6 +104,63 @@ body {
   cursor: default;
 }
 
+/* ---- Scope controls (depth/breadth) ---- */
+.scope {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.scope-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scope-row label {
+  font-size: 14px;
+  color: #5f6368;
+  min-width: 52px;
+}
+
+.scope-row input[type="range"] {
+  width: 120px;
+  accent-color: #1a73e8;
+  cursor: pointer;
+}
+
+.scope-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: #202124;
+  width: 12px;
+  text-align: center;
+}
+
+.scope-vibe {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 12px;
+  width: 78px;
+  text-align: center;
+  box-sizing: border-box;
+}
+.vibe-quick {
+  background: #e6f4ea;
+  color: #188038;
+}
+.vibe-balanced {
+  background: #e8f0fe;
+  color: #1a73e8;
+}
+.vibe-deep {
+  background: #fce8e6;
+  color: #c5221f;
+}
+
 /* ---- Topbar (after exploring) ---- */
 .topbar {
   display: flex;

@@ -98,23 +98,35 @@ async def _grow_children(tree: Tree, parent: Node, emit: Emit) -> list[Node]:
     return children
 
 
-async def _pick_next(question: str, frontier: list[Node]) -> list[Node]:
+async def _pick_next(question: str, frontier: list[Node], breadth: int) -> list[Node]:
     """Reflection: pick which frontier leaves to expand next (LLM, with fallback)."""
     by_id = {n.id: n for n in frontier}
     try:
         ids = await llm.reflect(
             question,
             [{"id": n.id, "label": n.label, "insight": n.insight} for n in frontier],
-            settings.expand_per_level,
+            breadth,
         )
     except Exception:  # boundary: LLM API
         ids = []
     picked = [by_id[i] for i in ids if i in by_id]
-    return picked or frontier[: settings.expand_per_level]
+    return picked or frontier[:breadth]
 
 
-async def explore(question: str, emit: Emit) -> None:
-    """Grow the tree: root → decompose → search/synthesize → reflect → repeat."""
+async def explore(
+    question: str,
+    emit: Emit,
+    max_depth: int | None = None,
+    breadth: int | None = None,
+) -> None:
+    """Grow the tree: root → decompose → search/synthesize → reflect → repeat.
+
+    max_depth / breadth override the server defaults when provided (per-request,
+    clamped to a sane range so a user request can't trigger a runaway tree).
+    """
+    max_depth = settings.max_depth if max_depth is None else max(1, min(max_depth, 4))
+    breadth = settings.expand_per_level if breadth is None else max(1, min(breadth, 4))
+
     tree = Tree()
 
     root = tree.add(label=question, parent_id=None, status="done", depth=0)
@@ -123,9 +135,9 @@ async def explore(question: str, emit: Emit) -> None:
     await emit({"type": "planning"})
     frontier = await _grow_children(tree, root, emit)
 
-    while frontier and frontier[0].depth < settings.max_depth:
+    while frontier and frontier[0].depth < max_depth:
         await emit({"type": "planning"})
-        picks = await _pick_next(question, frontier)
+        picks = await _pick_next(question, frontier, breadth)
         if not picks:
             break
 

@@ -34,6 +34,11 @@ async def ws(websocket: WebSocket) -> None:
             if msg.get("type") == "ask":
                 question = (msg.get("question") or "").strip()
                 if question:
-                    await explore(question, emit)
+                    await explore(
+                        question,
+                        emit,
+                        max_depth=msg.get("depth"),
+                        breadth=msg.get("breadth"),
+                    )
     except WebSocketDisconnect:
         return

@@ -67,9 +67,19 @@ function SearchBar({ autoFocus, question, setQuestion, ask, disabled }) {
   );
 }
 
-function SidePanel({ node, onClose }) {
+function SidePanel({ node, isLeaf, onExpand, onFollowup, onClose }) {
+  const [followup, setFollowup] = useState("");
   if (!node) return null;
   const sources = node.sources || [];
+  const canExpand = isLeaf && node.status === "done";
+
+  const submitFollowup = () => {
+    const q = followup.trim();
+    if (!q) return;
+    onFollowup(node.id, q);
+    setFollowup("");
+  };
+
   return (
     <aside className="panel">
       <div className="panel-head">
@@ -87,6 +97,12 @@ function SidePanel({ node, onClose }) {
             ? "searching…"
             : "pending…"}
         </p>
+
+        {canExpand && (
+          <button className="panel-expand" onClick={() => onExpand(node.id)}>
+            Expand this branch
+          </button>
+        )}
 
         <div className="panel-section-label">
           Sources {sources.length ? `(${sources.length})` : ""}
@@ -107,6 +123,19 @@ function SidePanel({ node, onClose }) {
         ) : (
           <p className="panel-empty">No sources yet.</p>
         )}
+
+        <div className="panel-section-label">Ask a follow-up</div>
+        <div className="panel-followup">
+          <input
+            value={followup}
+            onChange={(e) => setFollowup(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submitFollowup()}
+            placeholder="Ask something about this node…"
+          />
+          <button onClick={submitFollowup} disabled={!followup.trim()}>
+            Ask
+          </button>
+        </div>
       </div>
     </aside>
   );
@@ -165,6 +194,22 @@ export default function App() {
     );
   };
 
+  const send = (payload) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify(payload));
+  };
+  const expandNode = (id) => send({ type: "expand_node", node_id: id });
+  const followup = (id, query) =>
+    send({ type: "followup", parent_id: id, query });
+
+  // a node is an unexpanded leaf if nothing else points to it as parent
+  const parentIds = new Set(
+    Object.values(nodes)
+      .map((n) => n.parentId)
+      .filter(Boolean)
+  );
+  const isLeaf = (id) => !parentIds.has(id);
+
   if (!started) {
     return (
       <div className="app home">
@@ -215,6 +260,9 @@ export default function App() {
         />
         <SidePanel
           node={selectedId ? nodes[selectedId] : null}
+          isLeaf={selectedId ? isLeaf(selectedId) : false}
+          onExpand={expandNode}
+          onFollowup={followup}
           onClose={() => setSelectedId(null)}
         />
       </div>

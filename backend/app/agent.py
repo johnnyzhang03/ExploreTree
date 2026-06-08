@@ -116,18 +116,18 @@ async def _pick_next(question: str, frontier: list[Node], breadth: int) -> list[
 async def explore(
     question: str,
     emit: Emit,
+    tree: Tree,
     max_depth: int | None = None,
     breadth: int | None = None,
 ) -> None:
     """Grow the tree: root → decompose → search/synthesize → reflect → repeat.
 
-    max_depth / breadth override the server defaults when provided (per-request,
-    clamped to a sane range so a user request can't trigger a runaway tree).
+    The caller owns the tree (so it can be acted on later via expand_on_demand /
+    add_followup). max_depth / breadth override the server defaults when provided
+    (per-request, clamped so a user request can't trigger a runaway tree).
     """
     max_depth = settings.max_depth if max_depth is None else max(1, min(max_depth, 4))
     breadth = settings.expand_per_level if breadth is None else max(1, min(breadth, 4))
-
-    tree = Tree()
 
     root = tree.add(label=question, parent_id=None, status="done", depth=0)
     await emit({"type": "node_added", "node": root.to_dict()})
@@ -159,4 +159,33 @@ async def explore(
         )
         frontier = [child for children in grown for child in children]
 
+    await emit({"type": "done"})
+
+
+async def expand_on_demand(tree: Tree, node_id: str, emit: Emit) -> None:
+    """User-driven: decompose a specific existing node into children and search them."""
+    node = tree.nodes.get(node_id)
+    if node is None:
+        await emit({"type": "done"})
+        return
+    await emit({"type": "node_state", "ids": [node_id], "state": "expanding"})
+    await _grow_children(tree, node, emit)
+    await emit({"type": "node_state", "ids": [node_id], "state": None})
+    await emit({"type": "done"})
+
+
+async def add_followup(tree: Tree, parent_id: str, query: str, emit: Emit) -> None:
+    """User-driven: add one custom-query child under a node and search/synthesize it."""
+    parent = tree.nodes.get(parent_id)
+    if parent is None or not query.strip():
+        await emit({"type": "done"})
+        return
+    child = tree.add(
+        label=query.strip(),
+        parent_id=parent_id,
+        depth=parent.depth + 1,
+        verticals=["web", "news"],
+    )
+    await emit({"type": "node_added", "node": child.to_dict()})
+    await _expand_node(tree, child.id, emit)
     await emit({"type": "done"})

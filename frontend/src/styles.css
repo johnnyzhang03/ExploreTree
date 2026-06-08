@@ -266,6 +266,59 @@ body {
   margin: 0;
 }
 
+.panel-expand {
+  margin-top: 14px;
+  width: 100%;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.panel-expand:hover {
+  background: #1765cc;
+}
+
+.panel-followup {
+  display: flex;
+  gap: 8px;
+}
+.panel-followup input {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid #dfe1e5;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.panel-followup input:focus {
+  border-color: #1a73e8;
+}
+.panel-followup button {
+  padding: 9px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.panel-followup button:hover {
+  background: #1765cc;
+}
+.panel-followup button:disabled {
+  background: #c6d4f0;
+  cursor: default;
+}
+
 .panel-empty {
   font-size: 14px;
   color: #80868b;

@@ -117,6 +117,7 @@ export default function App() {
     "Is it worth opening a bubble tea shop in Singapore?"
   );
   const [nodes, setNodes] = useState({});
+  const [nodeStates, setNodeStates] = useState({}); // id -> transient cue
   const [status, setStatus] = useState("disconnected");
   const [started, setStarted] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
@@ -133,6 +134,15 @@ export default function App() {
       const msg = JSON.parse(e.data);
       if (msg.type === "node_added" || msg.type === "node_updated") {
         setNodes((prev) => ({ ...prev, [msg.node.id]: msg.node }));
+      } else if (msg.type === "node_state") {
+        setNodeStates((prev) => {
+          const next = { ...prev };
+          for (const id of msg.ids) {
+            if (msg.state) next[id] = msg.state;
+            else delete next[id];
+          }
+          return next;
+        });
       } else if (msg.type === "planning") {
         setStatus("Planning…");
       } else if (msg.type === "done") {
@@ -146,6 +156,7 @@ export default function App() {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     if (!question.trim()) return;
     setNodes({});
+    setNodeStates({});
     setStarted(true);
     setSelectedId(null);
     setStatus("exploring");
@@ -192,6 +203,7 @@ export default function App() {
       <div className="canvas">
         <Tree
           nodes={nodes}
+          nodeStates={nodeStates}
           onSelectNode={setSelectedId}
           selectedId={selectedId}
         />

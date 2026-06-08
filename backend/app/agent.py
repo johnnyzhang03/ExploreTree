@@ -137,11 +137,26 @@ async def explore(
 
     while frontier and frontier[0].depth < max_depth:
         await emit({"type": "planning"})
+        # #1: show the agent is evaluating the current frontier (on-canvas cue)
+        frontier_ids = [n.id for n in frontier]
+        await emit({"type": "node_state", "ids": frontier_ids, "state": "considering"})
+
         picks = await _pick_next(question, frontier, breadth)
+
+        # clear the "considering" cue from everyone, then...
+        await emit({"type": "node_state", "ids": frontier_ids, "state": None})
         if not picks:
             break
+        # #2: highlight the chosen parents before their children are generated
+        await emit(
+            {"type": "node_state", "ids": [p.id for p in picks], "state": "expanding"}
+        )
 
         grown = await asyncio.gather(*(_grow_children(tree, p, emit) for p in picks))
+        # the chosen parents are done expanding once their children exist
+        await emit(
+            {"type": "node_state", "ids": [p.id for p in picks], "state": None}
+        )
         frontier = [child for children in grown for child in children]
 
     await emit({"type": "done"})

@@ -333,6 +333,28 @@ body {
   animation: none;
 }
 
+/* #1: agent is evaluating this frontier node for the next round */
+.node-card.considering .card-bg,
+.node-card.considering.done .card-bg {
+  stroke: #a142f4;
+  stroke-width: 2;
+  animation: considerPulse 1.3s ease-in-out infinite;
+}
+
+/* #2: this node was picked and its children are about to be generated */
+.node-card.expanding .card-bg,
+.node-card.expanding.done .card-bg {
+  stroke: #1a73e8;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 6px rgba(26, 115, 232, 0.5));
+  animation: none;
+}
+
+@keyframes considerPulse {
+  0%, 100% { stroke-opacity: 0.35; }
+  50% { stroke-opacity: 1; }
+}
+
 .card-header {
   fill: #f8f9fa;
 }

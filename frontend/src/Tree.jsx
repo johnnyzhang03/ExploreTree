@@ -88,7 +88,7 @@ function nodeVerticals(d) {
   return list.filter((v) => VERTICALS[v]);
 }
 
-export default function Tree({ nodes, onSelectNode, selectedId }) {
+export default function Tree({ nodes, nodeStates = {}, onSelectNode, selectedId }) {
   const svgRef = useRef(null);
   const gRef = useRef(null);
   const zoomRef = useRef(null);
@@ -249,11 +249,11 @@ export default function Tree({ nodes, onSelectNode, selectedId }) {
       );
 
     // status class + text refresh on every render (enter and update)
-    node.attr(
-      "class",
-      (d) =>
-        `node-card ${d.data.status}${d.data.id === selectedId ? " selected" : ""}`
-    );
+    node.attr("class", (d) => {
+      const cue = nodeStates[d.data.id]; // "considering" | "expanding" | undefined
+      const sel = d.data.id === selectedId ? " selected" : "";
+      return `node-card ${d.data.status}${cue ? " " + cue : ""}${sel}`;
+    });
 
     const isRoot = (d) => d.data.depth === 0;
 
@@ -335,7 +335,7 @@ export default function Tree({ nodes, onSelectNode, selectedId }) {
       const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
       svg.transition(T()).call(zoomRef.current.transform, transform);
     }
-  }, [nodes]);
+  }, [nodes, nodeStates, selectedId]);
 
   return <svg ref={svgRef} width="100%" height="100%" />;
 }

@@ -169,7 +169,10 @@ export default function App() {
     return (
       <div className="app home">
         <div className="home-inner">
-          <h1 className="brand">ExploreTree</h1>
+          <h1 className="brand">
+            <span className="brand-explore">Explore</span>
+            <span className="brand-tree">Tree</span>
+          </h1>
           <SearchBar
             autoFocus
             question={question}
@@ -191,7 +194,10 @@ export default function App() {
   return (
     <div className="app">
       <div className="topbar">
-        <span className="brand-sm">ExploreTree</span>
+        <span className="brand-sm">
+          <span className="brand-explore">Explore</span>
+          <span className="brand-tree">Tree</span>
+        </span>
         <SearchBar
           question={question}
           setQuestion={setQuestion}

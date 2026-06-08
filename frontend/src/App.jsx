@@ -143,7 +143,7 @@ function SidePanel({ node, isLeaf, onExpand, onFollowup, onClose }) {
 
 export default function App() {
   const [question, setQuestion] = useState(
-    "Is it worth opening a bubble tea shop in Singapore?"
+    "What's driving the recent surge in AI chip demand?"
   );
   const [nodes, setNodes] = useState({});
   const [nodeStates, setNodeStates] = useState({}); // id -> transient cue

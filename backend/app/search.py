@@ -188,9 +188,69 @@ async def search_places(query: str, count: int = 5) -> list[SearchResult]:
     ]
 
 
+async def search_videos_text(query: str, count: int = 3) -> list[SearchResult]:
+    """Video results as text sources for synthesis (AI summary, else description)."""
+    data = await _post(settings.bing_videos_endpoint, query, count)
+    out = []
+    for r in data.get("videoResults", []):
+        text = (r.get("summary") or r.get("description") or "").strip()
+        if not text:
+            continue
+        out.append(
+            SearchResult(
+                title=r.get("title", ""),
+                url=r.get("url") or r.get("embeddingUrl", ""),
+                snippet=_to_snippet(text),
+                vertical="videos",
+            )
+        )
+    return out
+
+
 SEARCHERS = {
     "web": search_web,
     "news": search_news,
     "finance": search_finance,
     "places": search_places,
+    "videos": search_videos_text,
 }
+
+
+async def search_images(query: str, count: int = 6) -> list[dict]:
+    """Image results as media dicts: thumbnail to show, url/hostPage to open."""
+    data = await _post(settings.bing_images_endpoint, query, count)
+    out = []
+    for r in data.get("imageResults", []):
+        thumb = r.get("thumbnailUrl")
+        if not thumb:
+            continue
+        out.append(
+            {
+                "title": r.get("title", ""),
+                "thumbnail": thumb,
+                "link": r.get("hostPageUrl") or r.get("url", ""),
+                "width": r.get("width"),
+                "height": r.get("height"),
+            }
+        )
+    return out
+
+
+async def search_videos(query: str, count: int = 4) -> list[dict]:
+    """Video results as media dicts: thumbnail + the page/embed link to open."""
+    data = await _post(settings.bing_videos_endpoint, query, count)
+    out = []
+    for r in data.get("videoResults", []):
+        thumb = r.get("thumbnailUrl")
+        if not thumb:
+            continue
+        out.append(
+            {
+                "title": r.get("title", ""),
+                "thumbnail": thumb,
+                "link": r.get("url") or r.get("embeddingUrl", ""),
+                "publishedBy": r.get("publishedBy", ""),
+                "viewCount": r.get("viewCount"),
+            }
+        )
+    return out

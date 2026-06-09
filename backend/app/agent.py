@@ -13,13 +13,13 @@ from typing import Awaitable, Callable
 from . import llm
 from .config import settings
 from .llm import PlannedTopic
-from .search import SEARCHERS
+from .search import SEARCHERS, search_images, search_videos
 from .tree import Node, Tree
 
 Emit = Callable[[dict], Awaitable[None]]
 
 # How many results to pull per vertical (kept small to bound latency/cost).
-_VERTICAL_COUNTS = {"web": 4, "news": 3, "finance": 2, "places": 3}
+_VERTICAL_COUNTS = {"web": 4, "news": 3, "finance": 2, "places": 3, "videos": 3}
 
 
 def _fallback_decompose(question: str) -> list[PlannedTopic]:
@@ -189,3 +189,23 @@ async def add_followup(tree: Tree, parent_id: str, query: str, emit: Emit) -> No
     await emit({"type": "node_added", "node": child.to_dict()})
     await _expand_node(tree, child.id, emit)
     await emit({"type": "done"})
+
+
+async def get_media(tree: Tree, node_id: str, emit: Emit) -> None:
+    """Lazily fetch images + videos for a node (on panel-open) and emit them."""
+    node = tree.nodes.get(node_id)
+    if node is None:
+        return
+    images, videos = await asyncio.gather(
+        search_images(node.label, count=6),
+        search_videos(node.label, count=4),
+        return_exceptions=True,
+    )
+    await emit(
+        {
+            "type": "media",
+            "node_id": node_id,
+            "images": images if not isinstance(images, BaseException) else [],
+            "videos": videos if not isinstance(videos, BaseException) else [],
+        }
+    )

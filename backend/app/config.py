@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     bing_news_endpoint: str = "https://api.microsoft.ai/v3/search/news"
     bing_finance_endpoint: str = "https://api.microsoft.ai/v3/search/finance"
     bing_places_endpoint: str = "https://api.microsoft.ai/v3/search/places"
+    bing_images_endpoint: str = "https://api.microsoft.ai/v3/search/images"
+    bing_videos_endpoint: str = "https://api.microsoft.ai/v3/search/videos"
 
     openai_api_key: str = ""
     openai_base_url: str = ""

@@ -3,7 +3,7 @@ import json
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from .agent import add_followup, expand_on_demand, explore
+from .agent import add_followup, expand_on_demand, explore, get_media
 from .tree import Tree
 
 app = FastAPI(title="ExploreTree")
@@ -55,5 +55,9 @@ async def ws(websocket: WebSocket) -> None:
                 query = (msg.get("query") or "").strip()
                 if parent_id and query:
                     await add_followup(tree, parent_id, query, emit)
+            elif kind == "get_media" and tree is not None:
+                node_id = msg.get("node_id")
+                if node_id:
+                    await get_media(tree, node_id, emit)
     except WebSocketDisconnect:
         return

@@ -18,7 +18,7 @@ from .config import settings
 PLANNER_MODEL = settings.openai_planner_model
 SYNTH_MODEL = settings.openai_synth_model
 
-ALLOWED_VERTICALS = {"web", "news", "finance", "places"}
+ALLOWED_VERTICALS = {"web", "news", "finance", "places", "videos"}
 
 _PLANNER_SYSTEM = (
     "You are the planner for ExploreTree, a research agent that grows a knowledge "
@@ -31,10 +31,15 @@ _PLANNER_SYSTEM = (
     "developments, trends), 'finance' (company financials, stock/market data, "
     "revenue, valuation, profitability, startup costs, unit economics), 'places' "
     "(physical locations, venues, addresses, local businesses, competitors by "
-    "location, rents, foot traffic). Include 'finance' whenever a sub-topic touches "
-    "money/market/profitability dimensions, and 'places' whenever it touches physical "
-    "location or local competition — but do not add them to sub-topics that are purely "
-    "about general concepts, consumer sentiment, or background."
+    "location, rents, foot traffic), 'videos' (any topic where knowledgeable creators "
+    "or experts produce substantive analysis, commentary, explainers, deep-dives, "
+    "reviews, or tutorials — strong for finance/market analysis, tech and product "
+    "deep-dives, science, and expert opinion, not just how-tos). Include 'finance' "
+    "whenever a sub-topic touches money/market/profitability dimensions, 'places' "
+    "whenever it touches physical location or local competition, and 'videos' whenever "
+    "creators/experts likely cover the sub-topic with analysis or explanation (finance, "
+    "tech, science, how-to, reviews, opinion). Do not add the specialized verticals to "
+    "sub-topics that are purely abstract background with no expert/analytic angle."
 )
 
 

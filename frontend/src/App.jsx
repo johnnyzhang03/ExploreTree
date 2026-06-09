@@ -67,11 +67,14 @@ function SearchBar({ autoFocus, question, setQuestion, ask, disabled }) {
   );
 }
 
-function SidePanel({ node, isLeaf, onExpand, onFollowup, onClose }) {
+function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
   const [followup, setFollowup] = useState("");
   if (!node) return null;
   const sources = node.sources || [];
   const canExpand = isLeaf && node.status === "done";
+  const images = media?.images || [];
+  const videos = media?.videos || [];
+  const showMedia = node.status === "done";
 
   const submitFollowup = () => {
     const q = followup.trim();
@@ -124,6 +127,57 @@ function SidePanel({ node, isLeaf, onExpand, onFollowup, onClose }) {
           <p className="panel-empty">No sources yet.</p>
         )}
 
+        {showMedia && (images.length > 0 || !media) && (
+          <>
+            <div className="panel-section-label">Images</div>
+            {media ? (
+              images.length ? (
+                <div className="media-grid">
+                  {images.slice(0, 6).map((im, i) => (
+                    <a
+                      key={i}
+                      href={im.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="media-thumb"
+                      title={im.title}
+                    >
+                      <img src={im.thumbnail} alt={im.title} loading="lazy" />
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p className="panel-empty">No images found.</p>
+              )
+            ) : (
+              <p className="panel-empty">Loading…</p>
+            )}
+          </>
+        )}
+
+        {showMedia && media && videos.length > 0 && (
+          <>
+            <div className="panel-section-label">Videos</div>
+            <div className="media-videos">
+              {videos.slice(0, 4).map((v, i) => (
+                <a
+                  key={i}
+                  href={v.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="video-card"
+                >
+                  <img src={v.thumbnail} alt={v.title} loading="lazy" />
+                  <div className="video-meta">
+                    <span className="video-title">{v.title}</span>
+                    <span className="video-by">{v.publishedBy}</span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </>
+        )}
+
         <div className="panel-section-label">Ask a follow-up</div>
         <div className="panel-followup">
           <input
@@ -147,6 +201,7 @@ export default function App() {
   );
   const [nodes, setNodes] = useState({});
   const [nodeStates, setNodeStates] = useState({}); // id -> transient cue
+  const [media, setMedia] = useState({}); // id -> { images, videos }
   const [status, setStatus] = useState("disconnected");
   const [started, setStarted] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
@@ -174,6 +229,11 @@ export default function App() {
         });
       } else if (msg.type === "planning") {
         setStatus("Planning…");
+      } else if (msg.type === "media") {
+        setMedia((prev) => ({
+          ...prev,
+          [msg.node_id]: { images: msg.images || [], videos: msg.videos || [] },
+        }));
       } else if (msg.type === "done") {
         setStatus("Done");
       }
@@ -186,6 +246,7 @@ export default function App() {
     if (!question.trim()) return;
     setNodes({});
     setNodeStates({});
+    setMedia({});
     setStarted(true);
     setSelectedId(null);
     setStatus("exploring");
@@ -209,6 +270,15 @@ export default function App() {
       .filter(Boolean)
   );
   const isLeaf = (id) => !parentIds.has(id);
+
+  // lazily fetch media the first time a node's panel is opened
+  useEffect(() => {
+    if (!selectedId) return;
+    const node = nodes[selectedId];
+    if (!node || node.status !== "done") return;
+    if (media[selectedId]) return; // already fetched
+    send({ type: "get_media", node_id: selectedId });
+  }, [selectedId, nodes]);
 
   if (!started) {
     return (
@@ -260,6 +330,7 @@ export default function App() {
         />
         <SidePanel
           node={selectedId ? nodes[selectedId] : null}
+          media={selectedId ? media[selectedId] : null}
           isLeaf={selectedId ? isLeaf(selectedId) : false}
           onExpand={expandNode}
           onFollowup={followup}

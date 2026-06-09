@@ -8,6 +8,14 @@ Unlike black-box research agents that only hand you a final report, **the tree *
 
 > Full vision in [docs/proposal.md](docs/proposal.md); roadmap and weekly plan in [docs/plan.md](docs/plan.md).
 
+<p align="center"><em>Live tree growth from a question</em></p>
+
+![ExploreTree growing a tree](docs/media/demo1.gif)
+
+<p align="center"><em>Inspecting a node — insight, sources, and media</em></p>
+
+![Exploring a node in ExploreTree](docs/media/demo2.gif)
+
 ---
 
 ## Features
@@ -17,7 +25,9 @@ Unlike black-box research agents that only hand you a final report, **the tree *
   - **Web** & **News** (general background + current events)
   - **Finance** (structured stock/market data — market cap, P/E, dividend yield)
   - **Places** (local businesses — address, category, ratings, price)
+  - **Videos** (expert/creator analysis, explainers, reviews, how-tos — routed for finance, tech, science, and more; the AI summary/description feeds synthesis)
 - **Autonomous multi-level growth** — an LLM **reflection** step picks the most promising leaves to expand, growing the tree level by level up to a chosen depth.
+- **Multi-modal detail** — open a node to see its full insight, linked sources, plus a lazily-loaded **image grid and video cards** relevant to that node.
 - **Live, animated visualization** — nodes appear and fill in over a WebSocket; D3 enter/update/exit transitions, pan/zoom with auto-fit, and on-canvas cues showing the agent *evaluating* and *expanding* nodes.
 - **User-controlled scope** — depth & breadth sliders on the home screen with a live Quick / Balanced / Deep "vibe" indicator.
 - **Human-in-the-loop steering** — click any node for a detail panel with its full insight and linked sources; **expand** a leaf on demand, or ask a **follow-up** question to grow a custom branch.
@@ -43,7 +53,7 @@ Unlike black-box research agents that only hand you a final report, **the tree *
                             │
 ┌───────────────────────────▼──────────────────────────┐
 │   Microsoft AI Search   ·   Azure AI Foundry (LLM)    │
-│   web · news · finance · places       GPT (Responses) │
+│   web · news · finance · places · images · videos    GPT │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -106,7 +116,7 @@ Settings are read from `backend/.env` (gitignored; see [backend/.env.example](ba
 |---|---|
 | `BING_SEARCH_KEY` | Microsoft AI Search API key (used by all verticals) |
 | `BING_SEARCH_ENDPOINT` | Web search endpoint |
-| `BING_NEWS_ENDPOINT` / `BING_FINANCE_ENDPOINT` / `BING_PLACES_ENDPOINT` | Vertical endpoints |
+| `BING_NEWS_ENDPOINT` / `BING_FINANCE_ENDPOINT` / `BING_PLACES_ENDPOINT` / `BING_IMAGES_ENDPOINT` / `BING_VIDEOS_ENDPOINT` | Vertical endpoints |
 | `OPENAI_API_KEY` | Azure AI Foundry key |
 | `OPENAI_BASE_URL` | Foundry `/openai/v1` base URL |
 | `OPENAI_PLANNER_MODEL` / `OPENAI_SYNTH_MODEL` | Foundry deployment names for planning vs. synthesis |
@@ -119,4 +129,4 @@ Tuning knobs (in [backend/app/config.py](backend/app/config.py)): `max_depth`, `
 
 ## Status
 
-Weeks 1–4 of the [plan](docs/plan.md) are complete: vertical slice → LLM agent loop → multi-level growth & multi-vertical → human-in-the-loop. Post-MVP ideas (contradiction detection, export-to-brief, comparison mode, multi-modal nodes, sharing) are sketched in [docs/plan.md](docs/plan.md).
+Weeks 1–5 of the [plan](docs/plan.md) are complete: vertical slice → LLM agent loop → multi-level growth & multi-vertical → human-in-the-loop → robustness. Multi-modal nodes (image/video media + video as a synthesis vertical) are also in. Further post-MVP ideas (export-to-brief, comparison mode, sharing) are sketched in [docs/plan.md](docs/plan.md).

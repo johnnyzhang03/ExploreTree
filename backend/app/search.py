@@ -1,9 +1,14 @@
+import asyncio
+import random
 import re
 from dataclasses import dataclass
 
 import httpx
 
 from .config import settings
+
+# Transient HTTP statuses worth retrying (rate-limit + server-side hiccups).
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
 @dataclass
@@ -33,7 +38,14 @@ def _to_snippet(content: str, limit: int = 300) -> str:
 
 
 async def _post(endpoint: str, query: str, count: int) -> dict:
-    """POST a query to a Microsoft AI search vertical and return parsed JSON."""
+    """POST a query to a Microsoft AI search vertical and return parsed JSON.
+
+    Retries transient failures (429 rate-limits, 5xx, connection/timeout errors)
+    with short exponential backoff + jitter. The rate limit is burst-based, so a
+    few short retries clear most 429s — we deliberately ignore the API's suggested
+    60s retryAfter, which is too slow for live use. Non-retryable errors (other
+    4xx) fail immediately.
+    """
     if not settings.bing_search_key:
         raise RuntimeError("BING_SEARCH_KEY is not set — copy .env.example to .env and fill it in.")
 
@@ -46,10 +58,27 @@ async def _post(endpoint: str, query: str, count: int) -> dict:
         "contentFormat": "html",
         "maxLength": 4000,
     }
+
+    attempts = settings.search_max_retries + 1
     async with httpx.AsyncClient(timeout=20.0) as client:
-        resp = await client.post(endpoint, headers=headers, json=payload)
-        resp.raise_for_status()
-        return resp.json()
+        for attempt in range(attempts):
+            try:
+                resp = await client.post(endpoint, headers=headers, json=payload)
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status not in _RETRYABLE_STATUS or attempt == attempts - 1:
+                    raise  # non-transient, or out of attempts
+            except (httpx.TransportError, httpx.TimeoutException):
+                if attempt == attempts - 1:
+                    raise
+
+            # back off before the next try; jitter de-syncs parallel callers
+            delay = settings.search_backoff_base * (2**attempt)
+            await asyncio.sleep(delay + random.uniform(0, 0.5))
+
+    raise RuntimeError("unreachable")  # loop either returns or raises
 
 
 async def search_web(query: str, count: int = 5) -> list[SearchResult]:

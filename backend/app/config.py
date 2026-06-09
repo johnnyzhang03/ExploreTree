@@ -20,5 +20,8 @@ class Settings(BaseSettings):
     max_depth: int = 3
     expand_per_level: int = 2
 
+    search_max_retries: int = 3
+    search_backoff_base: float = 1.0
+
 
 settings = Settings()

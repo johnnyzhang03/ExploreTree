@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import * as d3 from "d3";
+import { VERTICALS, nodeVerticals } from "./verticals.js";
 
 const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
@@ -70,24 +71,6 @@ const NODE_W = 320;
 const NODE_H = 172;
 const PAD = 18;
 const HEADER_H = 64; // colored header band height
-
-// Per-vertical badge metadata: short label + accent color.
-const VERTICALS = {
-  web: { label: "Web", color: "#1a73e8" },
-  news: { label: "News", color: "#d93025" },
-  finance: { label: "Finance", color: "#188038" },
-  places: { label: "Places", color: "#e8710a" },
-  videos: { label: "Videos", color: "#9334e6" },
-};
-
-function nodeVerticals(d) {
-  // prefer the verticals that actually produced sources; else the planned set
-  const fromSources = [
-    ...new Set((d.data.sources || []).map((s) => s.vertical).filter(Boolean)),
-  ];
-  const list = fromSources.length ? fromSources : d.data.verticals || [];
-  return list.filter((v) => VERTICALS[v]);
-}
 
 export default function Tree({ nodes, nodeStates = {}, onSelectNode, selectedId }) {
   const svgRef = useRef(null);
@@ -290,7 +273,7 @@ export default function Tree({ nodes, nodeStates = {}, onSelectNode, selectedId 
       if (isRoot(d)) return;
       let x = PAD;
       const y = NODE_H - 26;
-      for (const v of nodeVerticals(d)) {
+      for (const v of nodeVerticals(d.data)) {
         const meta = VERTICALS[v];
         const g = sel.append("g").attr("transform", `translate(${x}, ${y})`);
         const text = g

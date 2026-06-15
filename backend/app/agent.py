@@ -52,7 +52,17 @@ async def _expand_node(tree: Tree, node_id: str, emit: Emit) -> None:
         for v in verticals
         if v in SEARCHERS
     ]
+    # Fetch the card cover image in the same parallel batch as the verticals,
+    # so the thumbnail ships with the node (no separate round-trip per card).
+    img_task = asyncio.create_task(search_images(node.label, count=1))
     groups = await asyncio.gather(*searches, return_exceptions=True)
+
+    try:
+        imgs = await img_task
+        node.card_image = imgs[0] if imgs else {}
+    except Exception:  # boundary: image search — never block the node on it
+        node.card_image = {}
+
     results = []
     for group in groups:
         if isinstance(group, BaseException):
@@ -209,3 +219,4 @@ async def get_media(tree: Tree, node_id: str, emit: Emit) -> None:
             "videos": videos if not isinstance(videos, BaseException) else [],
         }
     )
+

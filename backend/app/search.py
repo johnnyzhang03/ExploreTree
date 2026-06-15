@@ -17,14 +17,18 @@ class SearchResult:
     url: str
     snippet: str
     vertical: str = "web"
+    thumbnail: str | None = None  # only news/video verticals carry one
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "title": self.title,
             "url": self.url,
             "snippet": self.snippet,
             "vertical": self.vertical,
         }
+        if self.thumbnail:
+            d["thumbnail"] = self.thumbnail
+        return d
 
 
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -94,6 +98,18 @@ async def search_web(query: str, count: int = 5) -> list[SearchResult]:
     ]
 
 
+def _news_thumb(item: dict) -> str | None:
+    """Best-effort thumbnail URL from a news result; None if absent."""
+    img = item.get("image") or {}
+    thumb = img.get("thumbnail") or {}
+    return (
+        item.get("thumbnailUrl")
+        or thumb.get("contentUrl")
+        or img.get("contentUrl")
+        or img.get("url")
+    )
+
+
 async def search_news(query: str, count: int = 5) -> list[SearchResult]:
     data = await _post(settings.bing_news_endpoint, query, count)
     return [
@@ -102,6 +118,7 @@ async def search_news(query: str, count: int = 5) -> list[SearchResult]:
             url=r.get("url", ""),
             snippet=_to_snippet(r.get("content", "")),
             vertical="news",
+            thumbnail=_news_thumb(r),
         )
         for r in data.get("newsResults", [])
     ]
@@ -202,6 +219,7 @@ async def search_videos_text(query: str, count: int = 3) -> list[SearchResult]:
                 url=r.get("url") or r.get("embeddingUrl", ""),
                 snippet=_to_snippet(text),
                 vertical="videos",
+                thumbnail=r.get("thumbnailUrl"),
             )
         )
     return out

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import Tree from "./Tree.jsx";
+import CardView from "./CardView.jsx";
 
 const WS_URL = "ws://localhost:8000/ws";
 
@@ -207,6 +208,8 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [depth, setDepth] = useState(3);
   const [breadth, setBreadth] = useState(2);
+  const [view, setView] = useState("cards"); // "cards" | "map"
+  const [path, setPath] = useState([]); // node-id trail for the card view
   const wsRef = useRef(null);
 
   useEffect(() => {
@@ -249,6 +252,7 @@ export default function App() {
     setMedia({});
     setStarted(true);
     setSelectedId(null);
+    setPath([]);
     setStatus("exploring");
     wsRef.current.send(
       JSON.stringify({ type: "ask", question, depth, breadth })
@@ -270,6 +274,28 @@ export default function App() {
       .filter(Boolean)
   );
   const isLeaf = (id) => !parentIds.has(id);
+
+  // seed the card-view path at the root question once it arrives
+  const rootNode = Object.values(nodes).find((n) => n.parentId === null);
+  useEffect(() => {
+    if (rootNode && path.length === 0) setPath([rootNode.id]);
+  }, [rootNode, path.length]);
+
+  // card-view navigation
+  const drillInto = (node) => {
+    if (isLeaf(node.id)) expandNode(node.id); // grow children, then show its page
+    setPath((prev) => [...prev, node.id]);
+  };
+  const goToCrumb = (i) => setPath((prev) => prev.slice(0, i + 1));
+
+  // the current card page is "loading" if global exploration is running, or the
+  // page's own node is mid-expand (e.g. after clicking Expand on a deep leaf)
+  const pageNodeId = path[path.length - 1];
+  const pageLoading =
+    status === "exploring" ||
+    status === "Planning…" ||
+    nodeStates[pageNodeId] === "expanding" ||
+    nodeStates[pageNodeId] === "considering";
 
   // lazily fetch media the first time a node's panel is opened
   useEffect(() => {
@@ -319,15 +345,41 @@ export default function App() {
           ask={ask}
           disabled={status === "disconnected"}
         />
+        <div className="view-toggle">
+          <button
+            className={view === "cards" ? "active" : ""}
+            onClick={() => setView("cards")}
+          >
+            Cards
+          </button>
+          <button
+            className={view === "map" ? "active" : ""}
+            onClick={() => setView("map")}
+          >
+            Map
+          </button>
+        </div>
         <span className="status">{status}</span>
       </div>
       <div className="canvas">
-        <Tree
-          nodes={nodes}
-          nodeStates={nodeStates}
-          onSelectNode={setSelectedId}
-          selectedId={selectedId}
-        />
+        {view === "map" ? (
+          <Tree
+            nodes={nodes}
+            nodeStates={nodeStates}
+            onSelectNode={setSelectedId}
+            selectedId={selectedId}
+          />
+        ) : (
+          <CardView
+            nodes={nodes}
+            nodeStates={nodeStates}
+            path={path}
+            loading={pageLoading}
+            onCrumb={goToCrumb}
+            onOpen={setSelectedId}
+            onDrill={drillInto}
+          />
+        )}
         <SidePanel
           node={selectedId ? nodes[selectedId] : null}
           media={selectedId ? media[selectedId] : null}

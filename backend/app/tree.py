@@ -20,6 +20,7 @@ class Node:
     sources: list[dict] = field(default_factory=list)
     depth: int = 0
     verticals: list[str] = field(default_factory=lambda: ["web", "news"])
+    card_image: dict | None = None  # one thumbnail for the card cover
 
     def to_dict(self) -> dict:
         return {
@@ -31,6 +32,7 @@ class Node:
             "sources": self.sources,
             "depth": self.depth,
             "verticals": self.verticals,
+            "cardImage": self.card_image,
         }
 
 

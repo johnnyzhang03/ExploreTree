@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     bing_search_key: str = ""
-    bing_search_endpoint: str = "https://api.bing.microsoft.com/v7.0/search"
+    bing_search_endpoint: str = "https://api.microsoft.ai/v3/search/web"
     bing_news_endpoint: str = "https://api.microsoft.ai/v3/search/news"
     bing_finance_endpoint: str = "https://api.microsoft.ai/v3/search/finance"
     bing_places_endpoint: str = "https://api.microsoft.ai/v3/search/places"

@@ -99,7 +99,7 @@ async def plan(question: str) -> list[PlannedTopic]:
         instructions=_PLANNER_SYSTEM,
         input=f"Question: {question}",
         text_format=Decomposition,
-        reasoning={"effort": "low"},
+        reasoning={"effort": settings.openai_planner_effort},
     )
     parsed = response.output_parsed
     if not parsed:
@@ -146,7 +146,7 @@ async def reflect(question: str, frontier: list[dict], limit: int) -> list[str]:
         instructions=f"{_REFLECT_SYSTEM} Pick at most {limit} ids.",
         input=f"Root question: {question}\n\nFrontier nodes:\n{listing}",
         text_format=Expansion,
-        reasoning={"effort": "low"},
+        reasoning={"effort": settings.openai_planner_effort},
     )
     parsed = response.output_parsed
     valid = {n["id"] for n in frontier}

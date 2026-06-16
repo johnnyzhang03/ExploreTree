@@ -11,6 +11,10 @@ const WS_URL =
 
 const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
+// Source/media URLs come from external search results; only allow http(s) in
+// href so a javascript:/data: URL can't execute when clicked.
+const safeUrl = (url) => (/^https?:\/\//i.test(url || "") ? url : undefined);
+
 // Map (depth, breadth) to a human "vibe" label shown next to the sliders.
 function vibeOf(depth, breadth) {
   const score = depth + breadth;
@@ -123,7 +127,7 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
                 <span className={`src-badge src-${s.vertical || "web"}`}>
                   {s.vertical || "web"}
                 </span>
-                <a href={s.url} target="_blank" rel="noopener noreferrer">
+                <a href={safeUrl(s.url)} target="_blank" rel="noopener noreferrer">
                   {s.title || s.url}
                 </a>
               </li>
@@ -142,7 +146,7 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
                   {images.slice(0, 6).map((im, i) => (
                     <a
                       key={i}
-                      href={im.link}
+                      href={safeUrl(im.link)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="media-thumb"
@@ -168,7 +172,7 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
               {videos.slice(0, 4).map((v, i) => (
                 <a
                   key={i}
-                  href={v.link}
+                  href={safeUrl(v.link)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="video-card"

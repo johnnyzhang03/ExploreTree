@@ -92,7 +92,7 @@ Input: "Is it worth opening a bubble tea shop in Singapore?"
 ┌─────────────────────────▼────────────────────────────────────┐
 │                  Bing Search API Layer                        │
 │                                                              │
-│    Web    News    Finance    Places    Images    Sonic       │
+│    Web    News    Finance    Places    Images    Videos      │
 │     │      │        │         │         │        │          │
 │     └──────┴────────┴─────────┴─────────┴────────┘          │
 │              Unified response schema + parallel calls        │

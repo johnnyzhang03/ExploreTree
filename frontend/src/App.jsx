@@ -2,7 +2,12 @@ import React, { useEffect, useRef, useState } from "react";
 import Tree from "./Tree.jsx";
 import CardView from "./CardView.jsx";
 
-const WS_URL = "ws://localhost:8000/ws";
+// Same-origin in production (FastAPI serves this build); falls back to the
+// dev-server origin locally, where Vite proxies /ws to the backend.
+const WS_URL =
+  (window.location.protocol === "https:" ? "wss://" : "ws://") +
+  window.location.host +
+  "/ws";
 
 const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 

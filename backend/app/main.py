@@ -1,7 +1,9 @@
 import json
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .agent import add_followup, expand_on_demand, explore, get_media
 from .tree import Tree
@@ -61,3 +63,10 @@ async def ws(websocket: WebSocket) -> None:
                     await get_media(tree, node_id, emit)
     except WebSocketDisconnect:
         return
+
+
+# Serve the built frontend (single-service deploy). Mounted last so the /health
+# and /ws routes above take precedence; html=True gives SPA fallback to index.html.
+_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if _dist.is_dir():
+    app.mount("/", StaticFiles(directory=_dist, html=True), name="static")

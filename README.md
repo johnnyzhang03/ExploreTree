@@ -2,6 +2,8 @@
 
 **An agent-driven research engine whose reasoning is a visible, interactive, user-steerable knowledge tree.**
 
+**[▶ Live demo](https://exploretree-demo-a2hze7c2dbabg2bp.eastus2-01.azurewebsites.net)** — ask a question and watch the tree grow.
+
 You ask a complex question; an LLM agent decomposes it, searches across multiple Bing verticals, synthesizes insights, and grows a knowledge tree in real time — while you watch it think and steer where it goes next.
 
 Unlike black-box research agents that only hand you a final report, **the tree *is* the reasoning process**: every node shows its insight, its sources, and how it was reached.

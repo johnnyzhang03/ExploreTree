@@ -67,6 +67,13 @@ async def ws(websocket: WebSocket) -> None:
 
 # Serve the built frontend (single-service deploy). Mounted last so the /health
 # and /ws routes above take precedence; html=True gives SPA fallback to index.html.
-_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
-if _dist.is_dir():
-    app.mount("/", StaticFiles(directory=_dist, html=True), name="static")
+# Tries both layouts: local (backend/app/ -> ../../frontend/dist) and the deployed
+# wwwroot-root layout (app/ -> ../frontend/dist).
+_here = Path(__file__).resolve()
+for _candidate in (
+    _here.parent.parent.parent / "frontend" / "dist",  # local: backend/app/..
+    _here.parent.parent / "frontend" / "dist",          # deployed: app/ at root
+):
+    if _candidate.is_dir():
+        app.mount("/", StaticFiles(directory=_candidate, html=True), name="static")
+        break

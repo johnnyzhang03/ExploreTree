@@ -2,7 +2,7 @@
 
 **An agent-driven research engine whose reasoning is a visible, interactive, user-steerable knowledge tree.**
 
-**[▶ Live demo](https://exploretree-demo-a2hze7c2dbabg2bp.eastus2-01.azurewebsites.net)** — ask a question and watch the tree grow.
+**[▶ Live demo](https://exploretree-demo-a2hze7c2dbabg2bp.eastus2-01.azurewebsites.net)** — ask a question and watch a knowledge tree grow, as browsable cards or a live map.
 
 You ask a complex question; an LLM agent decomposes it, searches across multiple Bing verticals, synthesizes insights, and grows a knowledge tree in real time — while you watch it think and steer where it goes next.
 
@@ -29,6 +29,9 @@ Unlike black-box research agents that only hand you a final report, **the tree *
   - **Places** (local businesses — address, category, ratings, price)
   - **Videos** (expert/creator analysis, explainers, reviews, how-tos — routed for finance, tech, science, and more; the AI summary/description feeds synthesis)
 - **Autonomous multi-level growth** — an LLM **reflection** step picks the most promising leaves to expand, growing the tree level by level up to a chosen depth.
+- **Two ways to explore the same knowledge tree:**
+  - **Cards** (default) — a familiar, Pinterest-style drill-down: each topic is an image-forward card; a breadcrumb tracks your path; click to read detail, drill into sub-topics, or expand a leaf.
+  - **Map** — the live D3 tree canvas, for an at-a-glance view of the whole structure as it grows.
 - **Multi-modal detail** — open a node to see its full insight, linked sources, plus a lazily-loaded **image grid and video cards** relevant to that node.
 - **Live, animated visualization** — nodes appear and fill in over a WebSocket; D3 enter/update/exit transitions, pan/zoom with auto-fit, and on-canvas cues showing the agent *evaluating* and *expanding* nodes.
 - **User-controlled scope** — depth & breadth sliders on the home screen with a live Quick / Balanced / Deep "vibe" indicator.
@@ -41,7 +44,7 @@ Unlike black-box research agents that only hand you a final report, **the tree *
 ```
 ┌──────────────────────────────────────────────────────┐
 │            Frontend — React + D3  (Vite)              │
-│  Interactive tree canvas · side panel · scope sliders │
+│   Card drill-down · tree map · side panel · sliders   │
 └───────────────────────────┬──────────────────────────┘
                             │  WebSocket  (live, bidirectional)
 ┌───────────────────────────▼──────────────────────────┐
@@ -72,10 +75,12 @@ backend/app/
   tree.py     server-side Tree / Node state
   config.py   settings (pydantic-settings, reads backend/.env)
 frontend/src/
-  App.jsx     state, WebSocket wiring, search bar, scope sliders, side panel
-  Tree.jsx    D3 tree rendering, animations, pan/zoom, click handling
-  styles.css  styling
-docs/         proposal.md · plan.md
+  App.jsx       state, WebSocket wiring, search bar, scope sliders, view toggle
+  CardView.jsx  Pinterest-style card drill-down + breadcrumb navigation
+  Tree.jsx      D3 tree "map" rendering, animations, pan/zoom, click handling
+  verticals.js  shared per-vertical labels/colors (used by cards + tree)
+  styles.css    styling
+docs/         proposal.md · plan.md · DEPLOY.md
 ```
 
 ---
@@ -106,7 +111,7 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173**, set depth/breadth, type a question, hit **Explore**. Click a node to inspect it, expand it, or ask a follow-up.
+Open **http://localhost:5173**, set depth/breadth, type a question, hit **Explore**. Browse the results as **Cards** or switch to the **Map** view; click any card/node to inspect it, drill in, expand it, or ask a follow-up.
 
 ---
 
@@ -129,6 +134,6 @@ Tuning knobs (in [backend/app/config.py](backend/app/config.py)): `max_depth`, `
 
 ---
 
-## Status
+## Deploy
 
-Weeks 1–5 of the [plan](docs/plan.md) are complete: vertical slice → LLM agent loop → multi-level growth & multi-vertical → human-in-the-loop → robustness. Multi-modal nodes (image/video media + video as a synthesis vertical) are also in. Further post-MVP ideas (export-to-brief, comparison mode, sharing) are sketched in [docs/plan.md](docs/plan.md).
+The app runs as a **single service** — FastAPI serves the built frontend and the WebSocket from one origin. See **[docs/DEPLOY.md](docs/DEPLOY.md)** for a step-by-step Azure App Service guide (build the frontend, set secrets as app settings, enable WebSockets, deploy).

@@ -18,6 +18,7 @@ class SearchResult:
     snippet: str
     vertical: str = "web"
     thumbnail: str | None = None  # only news/video verticals carry one
+    finance: dict | None = None  # structured stock data for finance vertical
 
     def to_dict(self) -> dict:
         d = {
@@ -28,6 +29,8 @@ class SearchResult:
         }
         if self.thumbnail:
             d["thumbnail"] = self.thumbnail
+        if self.finance:
+            d["finance"] = self.finance
         return d
 
 
@@ -124,47 +127,120 @@ async def search_news(query: str, count: int = 5) -> list[SearchResult]:
     ]
 
 
-def _finance_snippet(item: dict) -> str:
-    """Build a compact insight from a finance result's structured stock context."""
+def _parse_finance(item: dict) -> tuple[str, dict | None]:
+    """Parse a finance result into (snippet text, structured data dict or None).
+
+    Returns finance_data for any instrument with structured data (Stock, Etf, Index,
+    etc.) or a minimal dict with just title/url for other finance results (articles)
+    so the frontend can render them in the finance section rather than generic sources.
+    """
     parts = list(item.get("snippets") or [])
     ctx = item.get("context") or {}
     inst = ctx.get("instrument") or {}
-    if ctx.get("$type") == "Stock" and inst:
+
+    title = item.get("title", "")
+    url = item.get("url", "")
+    ctx_type = ctx.get("$type", "").lower()
+
+    if inst and (inst.get("symbol") or inst.get("price") is not None):
         sym = inst.get("symbol") or inst.get("displayName") or ""
+        name = inst.get("displayName") or inst.get("name") or sym
         price = inst.get("price")
-        cur = inst.get("marketCapCurrency", "")
+        cur = inst.get("marketCapCurrency") or inst.get("currency") or "USD"
+        pricing = inst.get("intradayPricing") or {}
+
+        finance_data = {
+            "type": ctx_type or "instrument",
+            "symbol": sym,
+            "name": name,
+            "currency": cur,
+            "title": title,
+            "url": url,
+        }
+        if price is not None:
+            finance_data["price"] = price
+
+        change = inst.get("changeAmount") or pricing.get("priceChange")
+        change_pct = inst.get("changePercentage") or pricing.get("priceChangePercent")
+        if change is not None:
+            finance_data["change"] = change
+        if change_pct is not None:
+            finance_data["changePercent"] = change_pct
+
+        mc = inst.get("marketCap")
+        if mc:
+            finance_data["marketCap"] = mc
+        na = inst.get("netAssets")
+        if na:
+            finance_data["netAssets"] = na
+        pe = inst.get("peRatio")
+        if pe:
+            finance_data["peRatio"] = pe
+        er = inst.get("expenseRatio")
+        if er:
+            finance_data["expenseRatio"] = er
+        dy = inst.get("dividendYieldPercent")
+        if dy:
+            finance_data["dividendYield"] = dy
+        hi = pricing.get("price52WeekHigh") or pricing.get("price52wHigh")
+        lo = pricing.get("price52WeekLow") or pricing.get("price52wLow")
+        if hi:
+            finance_data["high52w"] = hi
+        if lo:
+            finance_data["low52w"] = lo
+
+        chart = ctx.get("chart") or {}
+        series = chart.get("series") or []
+        if series:
+            finance_data["priceHistory"] = [
+                pt.get("price") for pt in series if pt and pt.get("price") is not None
+            ]
+
         bits = []
         if price is not None:
             bits.append(f"price {price} {cur}".strip())
-        mc = inst.get("marketCap")
         if mc:
             bits.append(f"mktcap {mc:,} {cur}".strip())
-        pe = inst.get("peRatio")
+        if na:
+            bits.append(f"assets {na:,.0f} {cur}".strip())
         if pe:
             bits.append(f"P/E {pe:.1f}")
-        dy = inst.get("dividendYieldPercent")
+        if er:
+            bits.append(f"expense {er}%")
         if dy:
-            bits.append(f"div {dy}%")
-        pricing = inst.get("intradayPricing") or {}
-        hi, lo = pricing.get("price52wHigh"), pricing.get("price52wLow")
+            bits.append(f"yield {dy:.1f}%")
         if hi and lo:
             bits.append(f"52w {lo}–{hi}")
         if bits:
             parts.append(f"{sym}: " + " · ".join(bits))
-    return _to_snippet(" ".join(parts), limit=300)
+
+        return _to_snippet(" ".join(parts), limit=300), finance_data
+
+    if title or url:
+        return _to_snippet(" ".join(parts), limit=300), {
+            "type": "link",
+            "title": title,
+            "url": url,
+        }
+
+    return _to_snippet(" ".join(parts), limit=300), None
 
 
 async def search_finance(query: str, count: int = 5) -> list[SearchResult]:
     data = await _post(settings.bing_finance_endpoint, query, count)
-    return [
-        SearchResult(
-            title=r.get("title", ""),
-            url=r.get("url", ""),
-            snippet=_finance_snippet(r),
-            vertical="finance",
+    results = []
+    for r in data.get("financeResults", []):
+        snippet, finance_data = _parse_finance(r)
+        results.append(
+            SearchResult(
+                title=r.get("title", ""),
+                url=r.get("url", ""),
+                snippet=snippet,
+                vertical="finance",
+                finance=finance_data,
+            )
         )
-        for r in data.get("financeResults", [])
-    ]
+    return results
 
 
 def _places_snippet(item: dict) -> str:

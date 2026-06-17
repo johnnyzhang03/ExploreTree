@@ -77,10 +77,146 @@ function SearchBar({ autoFocus, question, setQuestion, ask, disabled }) {
   );
 }
 
+function formatNumber(n) {
+  if (n >= 1e12) return (n / 1e12).toFixed(2) + "T";
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+  return n.toFixed(2);
+}
+
+function Sparkline({ data, width = 80, height = 24, color = "#188038" }) {
+  if (!data || data.length < 2) return null;
+  const values = data.filter((v) => v != null);
+  if (values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * width;
+      const y = height - ((v - min) / range) * (height - 2) - 1;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  return (
+    <svg className="sparkline" width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+      <polyline fill="none" stroke={color} strokeWidth="1.5" points={points} />
+    </svg>
+  );
+}
+
+function FinanceCard({ data, safeUrl }) {
+  if (!data) return null;
+
+  if (data.type === "link") {
+    return (
+      <a
+        href={safeUrl(data.url)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="finance-link-card"
+      >
+        <span className="src-badge src-finance">Finance</span>
+        <span className="finance-link-title">{data.title || data.url}</span>
+      </a>
+    );
+  }
+
+  if (!data.symbol && data.price === undefined) return null;
+
+  const changeColor = (data.change ?? 0) >= 0 ? "#188038" : "#d93025";
+  const changeSign = (data.change ?? 0) >= 0 ? "+" : "";
+  const hasHistory = data.priceHistory && data.priceHistory.length >= 2;
+  const isEtf = data.type === "etf";
+  const isIndex = data.type === "index";
+
+  return (
+    <div className="finance-card">
+      <div className="finance-header">
+        {data.symbol && <span className="finance-symbol">{data.symbol}</span>}
+        {data.name && data.name !== data.symbol && (
+          <span className="finance-name">{data.name}</span>
+        )}
+        {data.url && (
+          <a
+            href={safeUrl(data.url)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="finance-link"
+            title="View details"
+          >
+            ↗
+          </a>
+        )}
+      </div>
+      <div className="finance-price-chart">
+        {data.price !== undefined && (
+          <div className="finance-price-row">
+            <span className="finance-price">
+              {data.currency === "USD" ? "$" : data.currency + " "}
+              {data.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+            {data.change !== undefined && (
+              <span className="finance-change" style={{ color: changeColor }}>
+                {changeSign}{data.change.toFixed(2)}
+                {data.changePercent !== undefined && ` (${changeSign}${data.changePercent.toFixed(2)}%)`}
+              </span>
+            )}
+          </div>
+        )}
+        {hasHistory && (
+          <Sparkline data={data.priceHistory} width={100} height={28} color={changeColor} />
+        )}
+      </div>
+      <div className="finance-metrics">
+        {data.marketCap && (
+          <div className="finance-metric">
+            <span className="metric-label">Mkt Cap</span>
+            <span className="metric-value">{formatNumber(data.marketCap)}</span>
+          </div>
+        )}
+        {data.netAssets && (
+          <div className="finance-metric">
+            <span className="metric-label">Net Assets</span>
+            <span className="metric-value">{formatNumber(data.netAssets)}</span>
+          </div>
+        )}
+        {data.peRatio && (
+          <div className="finance-metric">
+            <span className="metric-label">P/E</span>
+            <span className="metric-value">{data.peRatio.toFixed(2)}</span>
+          </div>
+        )}
+        {data.expenseRatio && (
+          <div className="finance-metric">
+            <span className="metric-label">Expense</span>
+            <span className="metric-value">{data.expenseRatio}%</span>
+          </div>
+        )}
+        {data.dividendYield && (
+          <div className="finance-metric">
+            <span className="metric-label">{data.type === "etf" ? "Yield" : "Div Yield"}</span>
+            <span className="metric-value">{Number(data.dividendYield).toFixed(2)}%</span>
+          </div>
+        )}
+        {data.low52w && data.high52w && (
+          <div className="finance-metric">
+            <span className="metric-label">52W Range</span>
+            <span className="metric-value">{data.low52w} – {data.high52w}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
   const [followup, setFollowup] = useState("");
   if (!node) return null;
-  const sources = node.sources || [];
+  const allSources = node.sources || [];
+  const financeData = allSources.filter((s) => s.finance).map((s) => s.finance);
+  const sources = allSources.filter((s) => !s.finance);
   const canExpand = isLeaf && node.status === "done";
   const images = media?.images || [];
   const videos = media?.videos || [];
@@ -115,6 +251,17 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
           <button className="panel-expand" onClick={() => onExpand(node.id)}>
             Expand this branch
           </button>
+        )}
+
+        {financeData.length > 0 && (
+          <>
+            <div className="panel-section-label">Finance</div>
+            <div className="finance-cards">
+              {financeData.map((fd, i) => (
+                <FinanceCard key={fd.symbol || fd.url || i} data={fd} safeUrl={safeUrl} />
+              ))}
+            </div>
+          </>
         )}
 
         <div className="panel-section-label">

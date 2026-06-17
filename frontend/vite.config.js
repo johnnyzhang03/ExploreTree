@@ -10,5 +10,8 @@ export default defineConfig({
       // WS_URL (ws://localhost:5173/ws) reaches FastAPI on :8000.
       "/ws": { target: "ws://localhost:8000", ws: true },
     },
+    headers: {
+      "Cache-Control": "no-store",
+    },
   },
 });

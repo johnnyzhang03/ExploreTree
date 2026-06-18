@@ -221,7 +221,10 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
   const canExpand = isLeaf && node.status === "done";
   const images = media?.images || [];
   const videos = media?.videos || [];
-  const showMedia = node.status === "done";
+  // Media is fetched on panel-open regardless of the node's search status, so
+  // it can stream in while the node/tree is still growing. `media` is the
+  // payload once it arrives (null until then) — gate sections on that, not on
+  // node.status, so thumbnails don't wait for the search to finish.
 
   const submitFollowup = () => {
     const q = followup.trim();
@@ -285,35 +288,31 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
           <p className="panel-empty">No sources yet.</p>
         )}
 
-        {showMedia && (images.length > 0 || !media) && (
-          <>
-            <div className="panel-section-label">Images</div>
-            {media ? (
-              images.length ? (
-                <div className="media-grid">
-                  {images.slice(0, 6).map((im, i) => (
-                    <a
-                      key={i}
-                      href={safeUrl(im.link)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="media-thumb"
-                      title={im.title}
-                    >
-                      <img src={im.thumbnail} alt={im.title} loading="lazy" />
-                    </a>
-                  ))}
-                </div>
-              ) : (
-                <p className="panel-empty">No images found.</p>
-              )
-            ) : (
-              <p className="panel-empty">Loading…</p>
-            )}
-          </>
+        <div className="panel-section-label">Images</div>
+        {media ? (
+          images.length ? (
+            <div className="media-grid">
+              {images.slice(0, 6).map((im, i) => (
+                <a
+                  key={i}
+                  href={safeUrl(im.link)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="media-thumb"
+                  title={im.title}
+                >
+                  <img src={im.thumbnail} alt={im.title} loading="lazy" />
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p className="panel-empty">No images found.</p>
+          )
+        ) : (
+          <p className="panel-empty">Loading…</p>
         )}
 
-        {showMedia && media && videos.length > 0 && (
+        {media && videos.length > 0 && (
           <>
             <div className="panel-section-label">Videos</div>
             <div className="media-videos">
@@ -454,11 +453,13 @@ export default function App() {
     nodeStates[pageNodeId] === "expanding" ||
     nodeStates[pageNodeId] === "considering";
 
-  // lazily fetch media the first time a node's panel is opened
+  // Fetch media as soon as a node's panel is opened. Media is keyed off the
+  // node's label (set at creation), so it does NOT need the node's search to
+  // finish — fetching on selection lets thumbnails stream in while the tree
+  // (and this node) are still growing.
   useEffect(() => {
     if (!selectedId) return;
-    const node = nodes[selectedId];
-    if (!node || node.status !== "done") return;
+    if (!nodes[selectedId]) return;
     if (media[selectedId]) return; // already fetched
     send({ type: "get_media", node_id: selectedId });
   }, [selectedId, nodes]);

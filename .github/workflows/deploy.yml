@@ -1,0 +1,42 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: exploretree-demo
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Stage deploy package
+        run: |
+          mkdir -p deploy_pkg/frontend
+          cp -r backend/app deploy_pkg/app
+          cp backend/requirements.txt deploy_pkg/requirements.txt
+          cp -r frontend/dist deploy_pkg/frontend/dist
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: deploy_pkg

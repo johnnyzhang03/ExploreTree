@@ -216,7 +216,8 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
   if (!node) return null;
   const allSources = node.sources || [];
   const financeData = allSources.filter((s) => s.finance).map((s) => s.finance);
-  const sources = allSources.filter((s) => !s.finance);
+  // videos render in their own thumbnail section below; finance has its own card
+  const sources = allSources.filter((s) => !s.finance && s.vertical !== "videos");
   const canExpand = isLeaf && node.status === "done";
   const images = media?.images || [];
   const videos = media?.videos || [];

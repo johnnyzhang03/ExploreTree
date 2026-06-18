@@ -202,13 +202,19 @@ async def add_followup(tree: Tree, parent_id: str, query: str, emit: Emit) -> No
 
 
 async def get_media(tree: Tree, node_id: str, emit: Emit) -> None:
-    """Lazily fetch images + videos for a node (on panel-open) and emit them."""
+    """Lazily fetch images + videos for a node (on panel-open) and emit them.
+
+    Videos are only fetched for nodes the planner routed to the videos vertical,
+    so the bottom Videos section stays consistent with the node's source badges
+    (and we skip the extra search call for non-video nodes).
+    """
     node = tree.nodes.get(node_id)
     if node is None:
         return
+    wants_videos = "videos" in (node.verticals or [])
     images, videos = await asyncio.gather(
         search_images(node.label, count=6),
-        search_videos(node.label, count=4),
+        search_videos(node.label, count=4) if wants_videos else _no_media(),
         return_exceptions=True,
     )
     await emit(
@@ -219,4 +225,8 @@ async def get_media(tree: Tree, node_id: str, emit: Emit) -> None:
             "videos": videos if not isinstance(videos, BaseException) else [],
         }
     )
+
+
+async def _no_media() -> list[dict]:
+    return []
 

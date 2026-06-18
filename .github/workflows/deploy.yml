@@ -1,5 +1,11 @@
 name: Deploy to Azure
 
+# Requires SCM basic-auth publishing enabled on the App Service:
+#   az resource update -g <rg> --name scm --namespace Microsoft.Web \
+#     --resource-type basicPublishingCredentialsPolicies \
+#     --parent sites/<app> --set properties.allow=true
+# (azure/webapps-deploy with a publish profile authenticates via SCM basic auth.)
+
 on:
   push:
     branches: [main]

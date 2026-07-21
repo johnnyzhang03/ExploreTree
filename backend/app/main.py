@@ -44,7 +44,13 @@ app.add_middleware(
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "providers": {
+            "bing": bool(settings.bing_search_key),
+            "openai": bool(settings.openai_api_key and settings.openai_base_url),
+        },
+    }
 
 
 def _websocket_origin_allowed(websocket: WebSocket) -> bool:

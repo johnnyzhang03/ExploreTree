@@ -74,37 +74,24 @@ jobs:
           ).encode()
           headers = {
               "Authorization": "Basic "
-              + base64.b64encode(credentials).decode()
+              + base64.b64encode(credentials).decode(),
+              "Content-Type": "application/json",
           }
-
-          def request(path, method="GET"):
-              return urllib.request.urlopen(
-                  urllib.request.Request(
-                      f"https://{host}{path}",
-                      headers=headers,
-                      method=method,
-                  )
-              )
-
-          with request("/api/processes") as response:
-              processes = json.load(response)
-
-          candidates = [
-              process
-              for process in processes
-              if any(
-                  marker in (
-                      f'{process.get("name", "")} '
-                      f'{process.get("command_line", "")}'
-                  ).lower()
-                  for marker in ("uvicorn", "gunicorn")
-              )
-          ]
-          if not candidates:
-              raise RuntimeError("No Uvicorn or Gunicorn worker found")
-
-          worker = candidates[0]
-          with request(f'/api/processes/{worker["id"]}', method="DELETE"):
-              pass
-          print(f'Restarted Python worker PID {worker["id"]}')
+          payload = json.dumps(
+              {
+                  "command": "touch /home/site/config/restartTrigger.txt",
+                  "dir": "/home/site/wwwroot",
+              }
+          ).encode()
+          request = urllib.request.Request(
+              f"https://{host}/api/command",
+              data=payload,
+              headers=headers,
+              method="POST",
+          )
+          with urllib.request.urlopen(request) as response:
+              result = json.load(response)
+          if result.get("ExitCode") != 0:
+              raise RuntimeError(result.get("Error") or "Restart trigger failed")
+          print("Triggered App Service Linux worker restart")
           PY

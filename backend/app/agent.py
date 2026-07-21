@@ -22,23 +22,44 @@ Emit = Callable[[dict], Awaitable[None]]
 _VERTICAL_COUNTS = {"web": 4, "news": 3, "finance": 2, "places": 3, "videos": 3}
 
 
-def _fallback_decompose(question: str) -> list[PlannedTopic]:
+def _fallback_decompose(
+    question: str, parent_label: str = ""
+) -> list[PlannedTopic]:
     """Week-1 stand-in used when the LLM planner is unavailable."""
     q = question.strip().rstrip("?")
+    prefix = (
+        f"{parent_label}: "
+        if parent_label and parent_label.casefold() != question.casefold()
+        else ""
+    )
     return [
-        PlannedTopic(query=f"{q} — overview", verticals=["web", "news"]),
-        PlannedTopic(query=f"{q} — key factors", verticals=["web", "news"]),
-        PlannedTopic(query=f"{q} — risks and challenges", verticals=["web", "news"]),
+        PlannedTopic(
+            title=f"{prefix}Current landscape",
+            query=f"{q} current landscape and recent developments",
+            verticals=["web", "news"],
+        ),
+        PlannedTopic(
+            title=f"{prefix}Key drivers and evidence",
+            query=f"{q} key drivers evidence and data",
+            verticals=["web", "news"],
+        ),
+        PlannedTopic(
+            title=f"{prefix}Risks and outlook",
+            query=f"{q} risks constraints and future outlook",
+            verticals=["web", "news"],
+        ),
     ]
 
 
-async def decompose(question: str) -> list[PlannedTopic]:
+async def decompose(
+    question: str, parent_label: str = ""
+) -> list[PlannedTopic]:
     """Plan sub-topics (with routed verticals) via the LLM, falling back to template."""
     try:
         subtopics = await llm.plan(question)
     except Exception:  # boundary: LLM API — never let planning kill the run
         subtopics = []
-    return subtopics or _fallback_decompose(question)
+    return subtopics or _fallback_decompose(question, parent_label)
 
 
 async def _expand_node(tree: Tree, node_id: str, emit: Emit) -> None:
@@ -48,18 +69,18 @@ async def _expand_node(tree: Tree, node_id: str, emit: Emit) -> None:
 
     verticals = node.verticals or ["web", "news"]
     searches = [
-        SEARCHERS[v](node.label, count=_VERTICAL_COUNTS.get(v, 3))
+        SEARCHERS[v](node.query, count=_VERTICAL_COUNTS.get(v, 3))
         for v in verticals
         if v in SEARCHERS
     ]
     # Fetch the card cover image in the same parallel batch as the verticals,
     # so the thumbnail ships with the node (no separate round-trip per card).
-    img_task = asyncio.create_task(search_images(node.label, count=1))
+    img_task = asyncio.create_task(search_images(node.query, count=4))
     groups = await asyncio.gather(*searches, return_exceptions=True)
 
     try:
         imgs = await img_task
-        node.card_image = imgs[0] if imgs else {}
+        node.card_image = await tree.claim_card_image(imgs)
     except Exception:  # boundary: image search — never block the node on it
         node.card_image = {}
 
@@ -81,7 +102,7 @@ async def _expand_node(tree: Tree, node_id: str, emit: Emit) -> None:
     snippets = [r.snippet for r in results if r.snippet]
     insight = ""
     try:
-        insight = await llm.synthesize(node.label, snippets)
+        insight = await llm.synthesize(node.query, snippets)
     except Exception:  # boundary: LLM API
         insight = ""
     node.insight = insight or (results[0].snippet if results else "(no results)")
@@ -94,12 +115,13 @@ async def _grow_children(tree: Tree, parent: Node, emit: Emit) -> list[Node]:
     """Decompose a parent into children, emit them, and expand all in parallel."""
     children = [
         tree.add(
-            label=topic.query,
+            label=topic.title or topic.query,
             parent_id=parent.id,
             depth=parent.depth + 1,
             verticals=topic.verticals,
+            query=topic.query,
         )
-        for topic in await decompose(parent.label)
+        for topic in await decompose(parent.query, parent.label)
     ]
     for child in children:
         await emit({"type": "node_added", "node": child.to_dict()})
@@ -213,8 +235,8 @@ async def get_media(tree: Tree, node_id: str, emit: Emit) -> None:
         return
     wants_videos = "videos" in (node.verticals or [])
     images, videos = await asyncio.gather(
-        search_images(node.label, count=6),
-        search_videos(node.label, count=4) if wants_videos else _no_media(),
+        search_images(node.query, count=6),
+        search_videos(node.query, count=4) if wants_videos else _no_media(),
         return_exceptions=True,
     )
     await emit(
@@ -229,4 +251,3 @@ async def get_media(tree: Tree, node_id: str, emit: Emit) -> None:
 
 async def _no_media() -> list[dict]:
     return []
-

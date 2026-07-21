@@ -45,6 +45,7 @@ _PLANNER_SYSTEM = (
 
 class PlannedTopic(BaseModel):
     query: str
+    title: str = ""
     verticals: list[str] = Field(default_factory=lambda: ["web"])
 
 
@@ -110,7 +111,9 @@ async def plan(question: str) -> list[PlannedTopic]:
         verts = [v for v in dict.fromkeys(t.verticals) if v in ALLOWED_VERTICALS]
         if "web" not in verts:
             verts.insert(0, "web")
-        topics.append(PlannedTopic(query=t.query, verticals=verts))
+        topics.append(
+            PlannedTopic(query=t.query, title=t.title or t.query, verticals=verts)
+        )
     return topics
 
 

@@ -28,7 +28,8 @@ body {
 }
 
 .mcp-app.fullscreen {
-  height: 100vh;
+  height: max(800px, 100vh);
+  min-height: 800px;
 }
 
 .mcp-app .topbar {

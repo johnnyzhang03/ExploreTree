@@ -36,13 +36,34 @@ jobs:
           npm run build
 
       - name: Stage deploy package
+        env:
+          BING_SEARCH_KEY: ${{ secrets.BING_SEARCH_KEY }}
+          BING_SEARCH_ENDPOINT: ${{ secrets.BING_SEARCH_ENDPOINT }}
+          BING_NEWS_ENDPOINT: ${{ secrets.BING_NEWS_ENDPOINT }}
+          BING_FINANCE_ENDPOINT: ${{ secrets.BING_FINANCE_ENDPOINT }}
+          BING_PLACES_ENDPOINT: ${{ secrets.BING_PLACES_ENDPOINT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_PLANNER_MODEL: ${{ secrets.OPENAI_PLANNER_MODEL }}
+          OPENAI_SYNTH_MODEL: ${{ secrets.OPENAI_SYNTH_MODEL }}
         run: |
           mkdir -p deploy_pkg/frontend
           cp -r backend/app deploy_pkg/app
           cp backend/requirements.txt deploy_pkg/requirements.txt
           cp -r frontend/dist deploy_pkg/frontend/dist
-          printf 'PUBLIC_BASE_URL=%s\nMCP_WIDGET_ORIGIN=%s\n' \
-            "$PUBLIC_BASE_URL" "$MCP_WIDGET_ORIGIN" > deploy_pkg/.env
+          {
+            printf 'PUBLIC_BASE_URL=%s\n' "$PUBLIC_BASE_URL"
+            printf 'MCP_WIDGET_ORIGIN=%s\n' "$MCP_WIDGET_ORIGIN"
+            printf 'BING_SEARCH_KEY=%s\n' "$BING_SEARCH_KEY"
+            printf 'BING_SEARCH_ENDPOINT=%s\n' "$BING_SEARCH_ENDPOINT"
+            printf 'BING_NEWS_ENDPOINT=%s\n' "$BING_NEWS_ENDPOINT"
+            printf 'BING_FINANCE_ENDPOINT=%s\n' "$BING_FINANCE_ENDPOINT"
+            printf 'BING_PLACES_ENDPOINT=%s\n' "$BING_PLACES_ENDPOINT"
+            printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+            printf 'OPENAI_BASE_URL=%s\n' "$OPENAI_BASE_URL"
+            printf 'OPENAI_PLANNER_MODEL=%s\n' "$OPENAI_PLANNER_MODEL"
+            printf 'OPENAI_SYNTH_MODEL=%s\n' "$OPENAI_SYNTH_MODEL"
+          } > deploy_pkg/.env
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3

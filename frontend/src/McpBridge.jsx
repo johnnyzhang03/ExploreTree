@@ -85,6 +85,18 @@ export function McpBridgeProvider({ children }) {
     setIsFullscreen(result.mode === "fullscreen");
   }, [app, isConnected, isFullscreen]);
 
+  const updateModelContext = useCallback(
+    async (text) => {
+      if (!app || typeof app.updateModelContext !== "function") {
+        return;
+      }
+      await app.updateModelContext({
+        content: [{ type: "text", text }],
+      });
+    },
+    [app]
+  );
+
   useEffect(() => {
     if (!app || !isConnected || typeof app.sendSizeChanged !== "function") return;
     let timer;
@@ -120,6 +132,7 @@ export function McpBridgeProvider({ children }) {
         callTool,
         openExternal,
         toggleFullscreen,
+        updateModelContext,
       }}
     >
       {children}

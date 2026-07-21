@@ -16,6 +16,27 @@ const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 // href so a javascript:/data: URL can't execute when clicked.
 const safeUrl = (url) => (/^https?:\/\//i.test(url || "") ? url : undefined);
 
+function modelContextFor(question, nodes) {
+  const findings = Object.values(nodes)
+    .filter((node) => node.parentId && node.status === "done" && node.insight)
+    .sort((a, b) => a.depth - b.depth)
+    .slice(0, 12)
+    .map((node) => {
+      const sources = (node.sources || [])
+        .map((source) => source.url)
+        .filter(Boolean)
+        .slice(0, 2);
+      const sourceText = sources.length ? ` Sources: ${sources.join(", ")}` : "";
+      return `- ${node.label}: ${node.insight}${sourceText}`;
+    });
+  return [
+    "ExploreTree research has completed.",
+    `Question: ${question}`,
+    "Use these sourced findings when answering subsequent user questions:",
+    ...findings,
+  ].join("\n");
+}
+
 // Map (depth, breadth) to a human "vibe" label shown next to the sliders.
 function vibeOf(depth, breadth) {
   const score = depth + breadth;
@@ -406,6 +427,7 @@ export default function App() {
     callTool,
     openExternal,
     toggleFullscreen,
+    updateModelContext,
   } = useMcpBridge();
   const [question, setQuestion] = useState(
     "What's driving the recent surge in AI chip demand?"
@@ -423,6 +445,9 @@ export default function App() {
   const [sessionId, setSessionId] = useState(null);
   const [streamUrl, setStreamUrl] = useState(null);
   const wsRef = useRef(null);
+  const nodesRef = useRef({});
+  const questionRef = useRef(question);
+  questionRef.current = question;
 
   useEffect(() => {
     if (!embedded || toolData?.type !== "exploration") return;
@@ -436,12 +461,14 @@ export default function App() {
     setStarted(true);
     setStatus("exploring");
     if (isNewSession) {
+      nodesRef.current = incomingNodes;
       setNodes(incomingNodes);
       setNodeStates({});
       setMedia({});
       setSelectedId(null);
       setPath([]);
     } else {
+      nodesRef.current = { ...nodesRef.current, ...incomingNodes };
       setNodes((previous) => ({ ...previous, ...incomingNodes }));
     }
   }, [embedded, toolData, sessionId]);
@@ -459,6 +486,7 @@ export default function App() {
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
       if (msg.type === "node_added" || msg.type === "node_updated") {
+        nodesRef.current = { ...nodesRef.current, [msg.node.id]: msg.node };
         setNodes((prev) => ({ ...prev, [msg.node.id]: msg.node }));
       } else if (msg.type === "node_state") {
         setNodeStates((prev) => {
@@ -479,18 +507,26 @@ export default function App() {
         setStatus((current) => (current === "Working…" ? "Ready" : current));
       } else if (msg.type === "done") {
         setStatus("Done");
+        if (embedded) {
+          updateModelContext(
+            modelContextFor(questionRef.current, nodesRef.current)
+          ).catch((error) =>
+            console.warn("Failed to update Copilot model context", error)
+          );
+        }
       } else if (msg.type === "error") {
         setStatus(msg.message || "Error");
       }
     };
     return () => ws.close();
-  }, [embedded, streamUrl]);
+  }, [embedded, streamUrl, updateModelContext]);
 
   const ask = () => {
     if (embedded) return;
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     if (!question.trim()) return;
     setNodes({});
+    nodesRef.current = {};
     setNodeStates({});
     setMedia({});
     setStarted(true);

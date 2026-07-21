@@ -10,7 +10,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from .config import settings
 from .sessions import SessionNotFoundError, sessions
 
-WIDGET_URI = "ui://exploretree/main"
+WIDGET_URI = "ui://exploretree/main-v2"
 
 
 def _public_origin() -> str:
@@ -60,6 +60,7 @@ def _error(message: str) -> types.CallToolResult:
 def _session_data(session) -> dict:
     return {
         "type": "exploration",
+        "status": "running",
         **session.snapshot(),
         "streamUrl": _stream_url(session.id),
     }
@@ -125,7 +126,11 @@ async def explore_tree(
         return _error("Depth and breadth must each be between 1 and 4.")
     session = sessions.start(question, max_depth=depth, breadth=breadth)
     return _result(
-        f"Started an ExploreTree research session for: {question}",
+        (
+            f"ExploreTree is researching this question in the interactive widget: "
+            f"{question}. Findings are still streaming, so do not answer from general "
+            "knowledge or claim that research is complete."
+        ),
         _session_data(session),
     )
 

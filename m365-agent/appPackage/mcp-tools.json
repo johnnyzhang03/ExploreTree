@@ -30,7 +30,7 @@
       },
       "_meta": {
         "ui": {
-          "resourceUri": "ui://exploretree/main"
+          "resourceUri": "ui://exploretree/main-v2"
         }
       }
     },
@@ -55,7 +55,7 @@
       },
       "_meta": {
         "ui": {
-          "resourceUri": "ui://exploretree/main"
+          "resourceUri": "ui://exploretree/main-v2"
         }
       }
     },
@@ -84,7 +84,7 @@
       },
       "_meta": {
         "ui": {
-          "resourceUri": "ui://exploretree/main"
+          "resourceUri": "ui://exploretree/main-v2"
         }
       }
     },
@@ -109,7 +109,7 @@
       },
       "_meta": {
         "ui": {
-          "resourceUri": "ui://exploretree/main",
+          "resourceUri": "ui://exploretree/main-v2",
           "visibility": [
             "app"
           ]

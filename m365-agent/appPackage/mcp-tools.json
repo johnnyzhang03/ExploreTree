@@ -1,0 +1,120 @@
+{
+  "tools": [
+    {
+      "name": "explore_tree",
+      "title": "Explore a question",
+      "description": "Research a complex question by decomposing it into a sourced knowledge tree. Depth and breadth must each be between 1 and 4.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "The complex question to research."
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4,
+            "default": 3
+          },
+          "breadth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4,
+            "default": 2
+          }
+        },
+        "required": [
+          "question"
+        ]
+      },
+      "_meta": {
+        "ui": {
+          "resourceUri": "ui://exploretree/main"
+        }
+      }
+    },
+    {
+      "name": "expand_node",
+      "title": "Expand a research branch",
+      "description": "Expand a leaf node in an existing ExploreTree research session.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "node_id"
+        ]
+      },
+      "_meta": {
+        "ui": {
+          "resourceUri": "ui://exploretree/main"
+        }
+      }
+    },
+    {
+      "name": "add_followup",
+      "title": "Add a research follow-up",
+      "description": "Add a focused follow-up question below a node in an existing ExploreTree research session.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "parent_id",
+          "question"
+        ]
+      },
+      "_meta": {
+        "ui": {
+          "resourceUri": "ui://exploretree/main"
+        }
+      }
+    },
+    {
+      "name": "get_node_media",
+      "title": "Load node media",
+      "description": "Load image and video references for an ExploreTree node.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "node_id"
+        ]
+      },
+      "_meta": {
+        "ui": {
+          "resourceUri": "ui://exploretree/main",
+          "visibility": [
+            "app"
+          ]
+        }
+      }
+    }
+  ]
+}

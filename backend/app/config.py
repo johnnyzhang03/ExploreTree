@@ -21,6 +21,9 @@ class Settings(BaseSettings):
 
     max_depth: int = 3
     expand_per_level: int = 2
+    session_ttl_seconds: int = 3600
+    public_base_url: str = "http://localhost:8000"
+    mcp_widget_origin: str = ""
 
     search_max_retries: int = 3
     search_backoff_base: float = 1.0

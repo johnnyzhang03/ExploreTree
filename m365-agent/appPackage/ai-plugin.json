@@ -1,0 +1,46 @@
+{
+  "$schema": "https://aka.ms/json-schemas/copilot-extensions/v2.1/plugin.schema.json",
+  "schema_version": "v2.4",
+  "name_for_human": "ExploreTree",
+  "description_for_human": "Research complex questions as interactive, sourced knowledge trees.",
+  "contact_email": "publisher-email@example.com",
+  "namespace": "exploretree",
+  "functions": [
+    {
+      "name": "explore_tree",
+      "description": "Research a complex question by decomposing it into a sourced knowledge tree."
+    },
+    {
+      "name": "expand_node",
+      "description": "Expand a leaf node in an existing ExploreTree research session."
+    },
+    {
+      "name": "add_followup",
+      "description": "Add a focused follow-up question below an existing ExploreTree node."
+    },
+    {
+      "name": "get_node_media",
+      "description": "Load image and video references for a node. Reserved for the interactive widget."
+    }
+  ],
+  "runtimes": [
+    {
+      "type": "RemoteMCPServer",
+      "spec": {
+        "url": "${{MCP_SERVER_URL}}/mcp",
+        "mcp_tool_description": {
+          "file": "mcp-tools.json"
+        }
+      },
+      "run_for_functions": [
+        "explore_tree",
+        "expand_node",
+        "add_followup",
+        "get_node_media"
+      ],
+      "auth": {
+        "type": "None"
+      }
+    }
+  ]
+}

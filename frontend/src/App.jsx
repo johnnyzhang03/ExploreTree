@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import Tree from "./Tree.jsx";
 import CardView from "./CardView.jsx";
+import { useMcpBridge } from "./McpBridge.jsx";
 
 // Same-origin in production (FastAPI serves this build); falls back to the
 // dev-server origin locally, where Vite proxies /ws to the backend.
-const WS_URL =
+const STANDALONE_WS_URL =
   (window.location.protocol === "https:" ? "wss://" : "ws://") +
   window.location.host +
   "/ws";
@@ -106,16 +107,22 @@ function Sparkline({ data, width = 80, height = 24, color = "#188038" }) {
   );
 }
 
-function FinanceCard({ data, safeUrl }) {
+function FinanceCard({ data, openExternal }) {
   if (!data) return null;
 
   if (data.type === "link") {
+    const url = safeUrl(data.url);
     return (
       <a
-        href={safeUrl(data.url)}
+        href={url}
         target="_blank"
         rel="noopener noreferrer"
         className="finance-link-card"
+        onClick={(event) => {
+          if (!url) return;
+          event.preventDefault();
+          openExternal(url);
+        }}
       >
         <span className="src-badge src-finance">Finance</span>
         <span className="finance-link-title">{data.title || data.url}</span>
@@ -145,6 +152,10 @@ function FinanceCard({ data, safeUrl }) {
             rel="noopener noreferrer"
             className="finance-link"
             title="View details"
+            onClick={(event) => {
+              event.preventDefault();
+              openExternal(safeUrl(data.url));
+            }}
           >
             ↗
           </a>
@@ -211,7 +222,16 @@ function FinanceCard({ data, safeUrl }) {
   );
 }
 
-function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
+function SidePanel({
+  node,
+  media,
+  isLeaf,
+  onExpand,
+  onFollowup,
+  onClose,
+  openExternal,
+  showFollowup,
+}) {
   const [followup, setFollowup] = useState("");
   if (!node) return null;
   const allSources = node.sources || [];
@@ -262,7 +282,11 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
             <div className="panel-section-label">Finance</div>
             <div className="finance-cards">
               {financeData.map((fd, i) => (
-                <FinanceCard key={fd.symbol || fd.url || i} data={fd} safeUrl={safeUrl} />
+                <FinanceCard
+                  key={fd.symbol || fd.url || i}
+                  data={fd}
+                  openExternal={openExternal}
+                />
               ))}
             </div>
           </>
@@ -278,7 +302,15 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
                 <span className={`src-badge src-${s.vertical || "web"}`}>
                   {s.vertical || "web"}
                 </span>
-                <a href={safeUrl(s.url)} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={safeUrl(s.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openExternal(safeUrl(s.url));
+                  }}
+                >
                   {s.title || s.url}
                 </a>
               </li>
@@ -300,6 +332,10 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
                   rel="noopener noreferrer"
                   className="media-thumb"
                   title={im.title}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openExternal(safeUrl(im.link));
+                  }}
                 >
                   <img src={im.thumbnail} alt={im.title} loading="lazy" />
                 </a>
@@ -323,6 +359,10 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="video-card"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openExternal(safeUrl(v.link));
+                  }}
                 >
                   <img src={v.thumbnail} alt={v.title} loading="lazy" />
                   <div className="video-meta">
@@ -335,24 +375,38 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
           </>
         )}
 
-        <div className="panel-section-label">Ask a follow-up</div>
-        <div className="panel-followup">
-          <input
-            value={followup}
-            onChange={(e) => setFollowup(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submitFollowup()}
-            placeholder="Ask something about this node…"
-          />
-          <button onClick={submitFollowup} disabled={!followup.trim()}>
-            Ask
-          </button>
-        </div>
+        {showFollowup && (
+          <>
+            <div className="panel-section-label">Ask a follow-up</div>
+            <div className="panel-followup">
+              <input
+                value={followup}
+                onChange={(e) => setFollowup(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submitFollowup()}
+                placeholder="Ask something about this node…"
+              />
+              <button onClick={submitFollowup} disabled={!followup.trim()}>
+                Ask
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </aside>
   );
 }
 
 export default function App() {
+  const {
+    embedded,
+    toolData,
+    isConnected: mcpConnected,
+    isFullscreen,
+    canFullscreen,
+    callTool,
+    openExternal,
+    toggleFullscreen,
+  } = useMcpBridge();
   const [question, setQuestion] = useState(
     "What's driving the recent surge in AI chip demand?"
   );
@@ -366,12 +420,41 @@ export default function App() {
   const [breadth, setBreadth] = useState(2);
   const [view, setView] = useState("cards"); // "cards" | "map"
   const [path, setPath] = useState([]); // node-id trail for the card view
+  const [sessionId, setSessionId] = useState(null);
+  const [streamUrl, setStreamUrl] = useState(null);
   const wsRef = useRef(null);
 
   useEffect(() => {
-    const ws = new WebSocket(WS_URL);
+    if (!embedded || toolData?.type !== "exploration") return;
+    const incomingNodes = Object.fromEntries(
+      (toolData.nodes || []).map((node) => [node.id, node])
+    );
+    const isNewSession = toolData.sessionId !== sessionId;
+    setSessionId(toolData.sessionId);
+    setStreamUrl(toolData.streamUrl);
+    setQuestion(toolData.question || "");
+    setStarted(true);
+    setStatus("exploring");
+    if (isNewSession) {
+      setNodes(incomingNodes);
+      setNodeStates({});
+      setMedia({});
+      setSelectedId(null);
+      setPath([]);
+    } else {
+      setNodes((previous) => ({ ...previous, ...incomingNodes }));
+    }
+  }, [embedded, toolData, sessionId]);
+
+  useEffect(() => {
+    const url = embedded ? streamUrl : STANDALONE_WS_URL;
+    if (!url) return;
+    const ws = new WebSocket(url);
     wsRef.current = ws;
-    ws.onopen = () => setStatus("Ready");
+    ws.onopen = () =>
+      setStatus((current) =>
+        embedded && current === "exploring" ? current : "Ready"
+      );
     ws.onclose = () => setStatus("disconnected");
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
@@ -393,14 +476,18 @@ export default function App() {
           ...prev,
           [msg.node_id]: { images: msg.images || [], videos: msg.videos || [] },
         }));
+        setStatus((current) => (current === "Working…" ? "Ready" : current));
       } else if (msg.type === "done") {
         setStatus("Done");
+      } else if (msg.type === "error") {
+        setStatus(msg.message || "Error");
       }
     };
     return () => ws.close();
-  }, []);
+  }, [embedded, streamUrl]);
 
   const ask = () => {
+    if (embedded) return;
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     if (!question.trim()) return;
     setNodes({});
@@ -415,7 +502,33 @@ export default function App() {
     );
   };
 
-  const send = (payload) => {
+  const send = async (payload) => {
+    if (embedded) {
+      if (!sessionId || !mcpConnected) return;
+      if (payload.type !== "get_media") setStatus("Working…");
+      try {
+        if (payload.type === "expand_node") {
+          await callTool("expand_node", {
+            session_id: sessionId,
+            node_id: payload.node_id,
+          });
+        } else if (payload.type === "followup") {
+          await callTool("add_followup", {
+            session_id: sessionId,
+            parent_id: payload.parent_id,
+            question: payload.query,
+          });
+        } else if (payload.type === "get_media") {
+          await callTool("get_node_media", {
+            session_id: sessionId,
+            node_id: payload.node_id,
+          });
+        }
+      } catch (error) {
+        setStatus(error.message || "Tool call failed");
+      }
+      return;
+    }
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify(payload));
   };
@@ -464,6 +577,14 @@ export default function App() {
     send({ type: "get_media", node_id: selectedId });
   }, [selectedId, nodes]);
 
+  if (embedded && !started) {
+    return (
+      <div className="app mcp-loading">
+        {mcpConnected ? "Preparing ExploreTree…" : "Connecting to Microsoft 365 Copilot…"}
+      </div>
+    );
+  }
+
   if (!started) {
     return (
       <div className="app home">
@@ -491,18 +612,20 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${embedded ? "mcp-app" : ""} ${isFullscreen ? "fullscreen" : ""}`}>
       <div className="topbar">
         <span className="brand-sm">
           <span className="brand-explore">Explore</span>
           <span className="brand-tree">Tree</span>
         </span>
-        <SearchBar
-          question={question}
-          setQuestion={setQuestion}
-          ask={ask}
-          disabled={status === "disconnected"}
-        />
+        {!embedded && (
+          <SearchBar
+            question={question}
+            setQuestion={setQuestion}
+            ask={ask}
+            disabled={status === "disconnected"}
+          />
+        )}
         <div className="view-toggle">
           <button
             className={view === "cards" ? "active" : ""}
@@ -517,6 +640,11 @@ export default function App() {
             Map
           </button>
         </div>
+        {embedded && canFullscreen && (
+          <button className="fullscreen-toggle" onClick={toggleFullscreen}>
+            {isFullscreen ? "Exit full screen" : "Full screen"}
+          </button>
+        )}
         <span className="status">{status}</span>
       </div>
       <div className="canvas">
@@ -545,9 +673,10 @@ export default function App() {
           onExpand={expandNode}
           onFollowup={followup}
           onClose={() => setSelectedId(null)}
+          openExternal={openExternal}
+          showFollowup={!embedded}
         />
       </div>
     </div>
   );
 }
-

@@ -13,6 +13,8 @@ on:
 
 env:
   AZURE_WEBAPP_NAME: exploretree-demo
+  PUBLIC_BASE_URL: https://exploretree-demo-a2hze7c2dbabg2bp.eastus2-01.azurewebsites.net
+  MCP_WIDGET_ORIGIN: https://1056851e4c3c58250520d82a50fb3a09.widget-renderer.usercontent.microsoft
 
 jobs:
   build-and-deploy:
@@ -39,6 +41,8 @@ jobs:
           cp -r backend/app deploy_pkg/app
           cp backend/requirements.txt deploy_pkg/requirements.txt
           cp -r frontend/dist deploy_pkg/frontend/dist
+          printf 'PUBLIC_BASE_URL=%s\nMCP_WIDGET_ORIGIN=%s\n' \
+            "$PUBLIC_BASE_URL" "$MCP_WIDGET_ORIGIN" > deploy_pkg/.env
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3

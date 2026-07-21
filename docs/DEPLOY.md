@@ -97,8 +97,15 @@ az webapp config appsettings set `
     OPENAI_BASE_URL="https://<your-resource>.services.ai.azure.com/openai/v1" `
     OPENAI_PLANNER_MODEL="<deployment-name>" `
     OPENAI_SYNTH_MODEL="<deployment-name>" `
+    PUBLIC_BASE_URL="https://$APP.azurewebsites.net" `
+    MCP_WIDGET_ORIGIN="<generated-widget-origin>" `
     SCM_DO_BUILD_DURING_DEPLOYMENT="true"
 ```
+
+Generate `MCP_WIDGET_ORIGIN` from the public MCP server URL with the
+[Widget Host URL Generator](https://aka.ms/mcpwidgeturlgenerator). Use the
+origin only, without a trailing slash. This allows the sandboxed Copilot widget
+to open its live WebSocket connection back to ExploreTree.
 
 > `SCM_DO_BUILD_DURING_DEPLOYMENT=true` makes Azure run `pip install -r
 > requirements.txt` on deploy (Oryx auto-detects the Python app).
@@ -156,6 +163,10 @@ az webapp deploy --name $APP --resource-group $RG --src-path deploy.zip --type z
 curl https://$APP.azurewebsites.net/health        # -> {"status":"ok"}
 ```
 
+The remote MCP endpoint is
+`https://<APP>.azurewebsites.net/mcp`. A browser `GET` isn't a valid MCP
+request; use MCP Inspector to verify tool/resource discovery.
+
 Then open **https://\<APP\>.azurewebsites.net** in a browser:
 - The ExploreTree home page loads (frontend served by FastAPI).
 - Type a question and hit **Explore** — the tree/cards should start filling in.
@@ -169,6 +180,24 @@ Logs:
 ```powershell
 az webapp log tail --name $APP --resource-group $RG
 ```
+
+## Sideload the Microsoft 365 Copilot agent
+
+Install Microsoft 365 Agents Toolkit 6.12 or later and make sure custom app
+upload is enabled for the tenant. Build the sideload package:
+
+```powershell
+.\m365-agent\build-package.ps1 `
+  -McpServerUrl "https://$APP.azurewebsites.net" `
+  -PublisherEmail "publisher@example.com"
+```
+
+Upload `m365-agent/build/ExploreTree.dev.zip` as a custom app. The development
+package uses anonymous MCP authentication. Before production distribution,
+replace `auth.type: None` with Entra SSO or OAuth 2.1 and enforce the
+corresponding bearer token on `/mcp`. Treat the short-lived session URL as a
+capability token for the widget stream and bind each session to the authenticated
+user before enabling multi-user production access.
 
 ---
 

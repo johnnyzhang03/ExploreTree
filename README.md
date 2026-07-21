@@ -76,12 +76,27 @@ backend/app/
   config.py   settings (pydantic-settings, reads backend/.env)
 frontend/src/
   App.jsx       state, WebSocket wiring, search bar, scope sliders, view toggle
+  McpBridge.jsx MCP Apps host bridge (tool results/calls, theme, fullscreen)
   CardView.jsx  Pinterest-style card drill-down + breadcrumb navigation
   Tree.jsx      D3 tree "map" rendering, animations, pan/zoom, click handling
   verticals.js  shared per-vertical labels/colors (used by cards + tree)
   styles.css    styling
 docs/         proposal.md · plan.md · DEPLOY.md
+m365-agent/   Microsoft 365 declarative-agent and MCP plugin package
 ```
+
+### Microsoft 365 Copilot MCP App
+
+ExploreTree also exposes a remote Streamable HTTP MCP server at `/mcp`. The
+`explore_tree` tool returns an MCP App widget and starts research in a
+server-side session; the widget then receives live tree events over a
+session-scoped WebSocket. The `expand_node`, `add_followup`, and
+`get_node_media` tools operate on that same session.
+
+The production frontend build is a self-contained HTML document so the MCP
+server can return it as the `ui://exploretree/main` resource with MIME type
+`text/html;profile=mcp-app`. The standalone web application remains available
+at `/`.
 
 ---
 
@@ -127,6 +142,8 @@ Settings are read from `backend/.env` (gitignored; see [backend/.env.example](ba
 | `OPENAI_API_KEY` | Azure AI Foundry key |
 | `OPENAI_BASE_URL` | Foundry `/openai/v1` base URL |
 | `OPENAI_PLANNER_MODEL` / `OPENAI_SYNTH_MODEL` | Foundry deployment names for planning vs. synthesis |
+| `PUBLIC_BASE_URL` | Public HTTPS origin used in MCP widget WebSocket URLs |
+| `MCP_WIDGET_ORIGIN` | Hashed Microsoft widget origin allowed by CORS/WebSocket validation |
 
 Tuning knobs (in [backend/app/config.py](backend/app/config.py)): `max_depth`, `expand_per_level` (defaults; overridable per-request via the UI sliders), `openai_timeout`, `openai_planner_effort`.
 

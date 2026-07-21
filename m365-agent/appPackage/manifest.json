@@ -1,0 +1,38 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.24/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.24",
+  "version": "0.1.0",
+  "id": "${{TEAMS_APP_ID}}",
+  "developer": {
+    "name": "ExploreTree",
+    "websiteUrl": "https://github.com/johnnyzhang03/ExploreTree",
+    "privacyUrl": "https://github.com/johnnyzhang03/ExploreTree",
+    "termsOfUseUrl": "https://github.com/johnnyzhang03/ExploreTree"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "ExploreTree${{APP_NAME_SUFFIX}}",
+    "full": "ExploreTree research agent"
+  },
+  "description": {
+    "short": "Explore complex questions as interactive knowledge trees",
+    "full": "ExploreTree decomposes complex questions, researches sourced subtopics, and renders the findings as an interactive knowledge tree in Microsoft 365 Copilot."
+  },
+  "accentColor": "#1A73E8",
+  "composeExtensions": [],
+  "copilotAgents": {
+    "declarativeAgents": [
+      {
+        "id": "declarativeAgent",
+        "file": "declarativeAgent.json"
+      }
+    ]
+  },
+  "permissions": [
+    "identity"
+  ],
+  "validDomains": []
+}

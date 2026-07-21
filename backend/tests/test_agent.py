@@ -1,5 +1,6 @@
 import unittest
 
+from app import llm
 from app.agent import _fallback_decompose
 from app.tree import Tree
 
@@ -26,3 +27,18 @@ class CardImageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await tree.claim_card_image(images), images[0])
         self.assertEqual(await tree.claim_card_image(images), images[1])
         self.assertEqual(await tree.claim_card_image(images), {})
+
+
+class ProviderDiagnosticsTests(unittest.TestCase):
+    def test_error_diagnostics_exclude_message_content(self) -> None:
+        error = RuntimeError("secret provider response")
+        error.status_code = 403
+
+        llm.record_error("plan", error)
+
+        diagnostics = llm.provider_diagnostics()
+        self.assertEqual(
+            diagnostics["lastError"],
+            {"operation": "plan", "type": "RuntimeError", "status": 403},
+        )
+        self.assertNotIn("secret provider response", repr(diagnostics))

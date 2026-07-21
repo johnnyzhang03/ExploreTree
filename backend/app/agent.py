@@ -57,7 +57,8 @@ async def decompose(
     """Plan sub-topics (with routed verticals) via the LLM, falling back to template."""
     try:
         subtopics = await llm.plan(question)
-    except Exception:  # boundary: LLM API — never let planning kill the run
+    except Exception as error:  # boundary: LLM API — keep the run usable
+        llm.record_error("plan", error)
         subtopics = []
     return subtopics or _fallback_decompose(question, parent_label)
 
@@ -103,7 +104,8 @@ async def _expand_node(tree: Tree, node_id: str, emit: Emit) -> None:
     insight = ""
     try:
         insight = await llm.synthesize(node.query, snippets)
-    except Exception:  # boundary: LLM API
+    except Exception as error:  # boundary: LLM API
+        llm.record_error("synthesize", error)
         insight = ""
     node.insight = insight or (results[0].snippet if results else "(no results)")
 
@@ -139,7 +141,8 @@ async def _pick_next(question: str, frontier: list[Node], breadth: int) -> list[
             [{"id": n.id, "label": n.label, "insight": n.insight} for n in frontier],
             breadth,
         )
-    except Exception:  # boundary: LLM API
+    except Exception as error:  # boundary: LLM API
+        llm.record_error("reflect", error)
         ids = []
     picked = [by_id[i] for i in ids if i in by_id]
     return picked or frontier[:breadth]

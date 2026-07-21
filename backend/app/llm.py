@@ -10,6 +10,8 @@ The Foundry endpoint exposes an OpenAI-compatible /openai/v1 surface, so we poin
 the plain AsyncOpenAI client at it via base_url. The deployed models are served
 through the Responses API; /chat/completions returns 400 for them.
 """
+from typing import Any
+
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
@@ -19,6 +21,24 @@ PLANNER_MODEL = settings.openai_planner_model
 SYNTH_MODEL = settings.openai_synth_model
 
 ALLOWED_VERTICALS = {"web", "news", "finance", "places", "videos"}
+_last_error: dict[str, Any] | None = None
+
+
+def record_error(operation: str, error: Exception) -> None:
+    """Retain non-sensitive provider failure metadata for health diagnostics."""
+    global _last_error
+    _last_error = {
+        "operation": operation,
+        "type": type(error).__name__,
+        "status": getattr(error, "status_code", None),
+    }
+
+
+def provider_diagnostics() -> dict[str, Any]:
+    return {
+        "configured": bool(settings.openai_api_key and settings.openai_base_url),
+        "lastError": _last_error,
+    }
 
 _PLANNER_SYSTEM = (
     "You are the planner for ExploreTree, a research agent that grows a knowledge "

@@ -6,6 +6,8 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+
+from . import llm
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
@@ -48,7 +50,7 @@ async def health() -> dict:
         "status": "ok",
         "providers": {
             "bing": bool(settings.bing_search_key),
-            "openai": bool(settings.openai_api_key and settings.openai_base_url),
+            "openai": llm.provider_diagnostics(),
         },
     }
 

@@ -50,3 +50,61 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: deploy_pkg
+
+      - name: Restart Python worker
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import urllib.request
+          import xml.etree.ElementTree as ET
+
+          root = ET.fromstring(os.environ["PUBLISH_PROFILE"])
+          profile = next(
+              item
+              for item in root.findall("publishProfile")
+              if item.attrib.get("publishMethod") == "MSDeploy"
+          )
+          host = profile.attrib["publishUrl"].split(":", 1)[0]
+          credentials = (
+              f'{profile.attrib["userName"]}:{profile.attrib["userPWD"]}'
+          ).encode()
+          headers = {
+              "Authorization": "Basic "
+              + base64.b64encode(credentials).decode()
+          }
+
+          def request(path, method="GET"):
+              return urllib.request.urlopen(
+                  urllib.request.Request(
+                      f"https://{host}{path}",
+                      headers=headers,
+                      method=method,
+                  )
+              )
+
+          with request("/api/processes") as response:
+              processes = json.load(response)
+
+          candidates = [
+              process
+              for process in processes
+              if any(
+                  marker in (
+                      f'{process.get("name", "")} '
+                      f'{process.get("command_line", "")}'
+                  ).lower()
+                  for marker in ("uvicorn", "gunicorn")
+              )
+          ]
+          if not candidates:
+              raise RuntimeError("No Uvicorn or Gunicorn worker found")
+
+          worker = candidates[0]
+          with request(f'/api/processes/{worker["id"]}', method="DELETE"):
+              pass
+          print(f'Restarted Python worker PID {worker["id"]}')
+          PY

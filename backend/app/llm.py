@@ -27,10 +27,16 @@ _last_error: dict[str, Any] | None = None
 def record_error(operation: str, error: Exception) -> None:
     """Retain non-sensitive provider failure metadata for health diagnostics."""
     global _last_error
+    causes = []
+    current = error.__cause__ or error.__context__
+    while current is not None and len(causes) < 4:
+        causes.append(type(current).__name__)
+        current = current.__cause__ or current.__context__
     _last_error = {
         "operation": operation,
         "type": type(error).__name__,
         "status": getattr(error, "status_code", None),
+        "causes": causes,
     }
 
 

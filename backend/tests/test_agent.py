@@ -39,6 +39,11 @@ class ProviderDiagnosticsTests(unittest.TestCase):
         diagnostics = llm.provider_diagnostics()
         self.assertEqual(
             diagnostics["lastError"],
-            {"operation": "plan", "type": "RuntimeError", "status": 403},
+            {
+                "operation": "plan",
+                "type": "RuntimeError",
+                "status": 403,
+                "causes": [],
+            },
         )
         self.assertNotIn("secret provider response", repr(diagnostics))

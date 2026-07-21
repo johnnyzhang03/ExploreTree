@@ -49,7 +49,18 @@ async def health() -> dict:
 
 def _websocket_origin_allowed(websocket: WebSocket) -> bool:
     origin = websocket.headers.get("origin", "")
-    return origin in allowed_origins
+    if origin in allowed_origins:
+        return True
+    parsed = urlsplit(origin)
+    hostname = parsed.hostname or ""
+    widget_suffixes = (
+        ".widget-renderer.usercontent.microsoft",
+        ".widget-renderer.usercontent.microsoft.com",
+        ".widget-renderer.usercontent.dev.microsoft",
+        ".widget-renderer.usgovcloud-usercontent.microsoft",
+        ".dod.widget-renderer.usgovcloud-usercontent.microsoft",
+    )
+    return parsed.scheme == "https" and hostname.endswith(widget_suffixes)
 
 
 async def _forward_session(websocket: WebSocket, session_id: str) -> None:

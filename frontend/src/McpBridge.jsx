@@ -86,15 +86,16 @@ export function McpBridgeProvider({ children }) {
   }, [app, isConnected, isFullscreen]);
 
   const updateModelContext = useCallback(
-    async (text) => {
-      if (!app || typeof app.updateModelContext !== "function") {
-        return;
+    async (text, structuredContent) => {
+      if (!app || !isConnected || typeof app.updateModelContext !== "function") {
+        throw new Error("The MCP host does not support model context updates.");
       }
       await app.updateModelContext({
         content: [{ type: "text", text }],
+        structuredContent,
       });
     },
-    [app]
+    [app, isConnected]
   );
 
   useEffect(() => {

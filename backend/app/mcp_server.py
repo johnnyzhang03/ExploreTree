@@ -64,10 +64,30 @@ def _error(message: str) -> types.CallToolResult:
 def _session_data(session) -> dict:
     return {
         "type": "exploration",
-        "status": "running",
         **session.snapshot(),
         "streamUrl": _stream_url(session.id),
     }
+
+
+def _artifact_text(artifact: dict) -> str:
+    if artifact["status"] == "running":
+        return (
+            "ExploreTree is still researching this question. Wait for the widget "
+            "to finish before requesting conclusions."
+        )
+    if artifact["status"] == "failed":
+        return "ExploreTree research failed before a complete artifact was produced."
+    lines = [
+        "ExploreTree research is complete. Use these sourced findings:",
+    ]
+    for finding in artifact["keyFindings"]:
+        source = finding["sources"][0]["url"] if finding["sources"] else ""
+        suffix = f" Source: {source}" if source else ""
+        lines.append(
+            f"- [{finding['nodeId']}] {finding['title']}: "
+            f"{finding['insight']}{suffix}"
+        )
+    return "\n".join(lines)
 
 
 widget_meta = {
@@ -200,6 +220,23 @@ async def add_followup(
     except ValueError as exc:
         return _error(str(exc))
     return _result("Added the follow-up branch.", _session_data(session))
+
+
+@mcp.tool(
+    name="get_research_results",
+    description=(
+        "Retrieve the current status and compact sourced findings for an existing "
+        "ExploreTree session. Use this before answering questions about completed "
+        "research when the final artifact is not already present in model context."
+    ),
+)
+async def get_research_results(session_id: str) -> types.CallToolResult:
+    try:
+        session = sessions.get(session_id)
+    except SessionNotFoundError:
+        return _error("The exploration session was not found or has expired.")
+    artifact = session.artifact()
+    return _result(_artifact_text(artifact), artifact)
 
 
 @mcp.tool(

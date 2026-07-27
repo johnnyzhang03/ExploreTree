@@ -23,10 +23,13 @@ class ExplorationSession:
     id: str
     question: str
     brief: ResearchBrief | None = None
+    status: str = "running"
     tree: Tree = field(default_factory=Tree)
     events: list[dict] = field(default_factory=list)
     subscribers: set[asyncio.Queue] = field(default_factory=set)
     tasks: set[asyncio.Task] = field(default_factory=set)
+    active_operations: int = 0
+    operation_failed: bool = False
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     last_accessed: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -37,6 +40,21 @@ class ExplorationSession:
             subscribers = tuple(self.subscribers)
         for queue in subscribers:
             queue.put_nowait(event)
+
+    def begin_operation(self) -> None:
+        if self.active_operations == 0:
+            self.operation_failed = False
+        self.active_operations += 1
+        self.status = "running"
+
+    async def finish_operation(self, failed: bool = False) -> None:
+        async with self.lock:
+            self.active_operations = max(0, self.active_operations - 1)
+            self.operation_failed = self.operation_failed or failed
+            if self.active_operations == 0:
+                self.status = (
+                    "failed" if self.operation_failed else "completed"
+                )
 
     async def subscribe(self) -> tuple[list[dict], asyncio.Queue]:
         queue: asyncio.Queue = asyncio.Queue()
@@ -56,7 +74,59 @@ class ExplorationSession:
             "sessionId": self.id,
             "question": self.question,
             "brief": brief.to_dict(),
+            "status": self.status,
             "nodes": [node.to_dict() for node in self.tree.nodes.values()],
+        }
+
+    def artifact(self, limit: int = 8) -> dict:
+        brief = self.brief or ResearchBrief.create(self.question)
+        completed = sorted(
+            (
+                node
+                for node in self.tree.nodes.values()
+                if node.parent_id and node.status == "done" and node.insight
+            ),
+            key=lambda node: (node.depth, node.id),
+        )
+        findings = []
+        for node in completed[:limit]:
+            sources = [
+                {
+                    "title": source.get("title") or source.get("url"),
+                    "url": source.get("url"),
+                }
+                for source in node.sources
+                if source.get("url")
+            ][:1]
+            findings.append(
+                {
+                    "nodeId": node.id,
+                    "title": node.label,
+                    "insight": node.insight,
+                    "verticals": node.verticals,
+                    "sources": sources,
+                }
+            )
+        return {
+            "type": "exploretree.research-artifact",
+            "sessionId": self.id,
+            "status": self.status,
+            "brief": brief.to_dict(),
+            "coverage": {
+                "completedNodes": len(completed),
+                "maximumDepth": max(
+                    (node.depth for node in completed),
+                    default=0,
+                ),
+                "verticals": sorted(
+                    {
+                        vertical
+                        for node in completed
+                        for vertical in node.verticals
+                    }
+                ),
+            },
+            "keyFindings": findings,
         }
 
 
@@ -136,12 +206,17 @@ class SessionManager:
         return session
 
     def _spawn(self, session: ExplorationSession, operation) -> None:
+        session.begin_operation()
+
         async def run() -> None:
+            failed = False
             try:
                 await operation
             except asyncio.CancelledError:
+                failed = True
                 raise
             except Exception:
+                failed = True
                 logger.exception("Exploration session operation failed")
                 await session.publish(
                     {
@@ -149,6 +224,8 @@ class SessionManager:
                         "message": "The exploration operation failed.",
                     }
                 )
+            finally:
+                await session.finish_operation(failed=failed)
 
         task = asyncio.create_task(run())
         session.tasks.add(task)

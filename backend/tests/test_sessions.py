@@ -23,6 +23,17 @@ class ExplorationSessionTests(unittest.IsolatedAsyncioTestCase):
         await session.unsubscribe(queue)
         self.assertEqual(session.subscribers, set())
 
+    async def test_session_completes_after_all_operations_finish(self) -> None:
+        session = ExplorationSession(id="session", question="question")
+
+        session.begin_operation()
+        session.begin_operation()
+        await session.finish_operation()
+
+        self.assertEqual(session.status, "running")
+        await session.finish_operation()
+        self.assertEqual(session.status, "completed")
+
     async def test_snapshot_contains_default_research_brief(self) -> None:
         session = ExplorationSession(id="session", question="question")
 
@@ -37,6 +48,39 @@ class ExplorationSessionTests(unittest.IsolatedAsyncioTestCase):
                 "freshness": "",
                 "desiredOutput": "",
             },
+        )
+
+    async def test_artifact_contains_compact_sourced_findings(self) -> None:
+        session = ExplorationSession(id="session", question="question")
+        node = session.tree.add(
+            label="Market economics",
+            parent_id="root",
+            status="done",
+            depth=1,
+            verticals=["web", "finance"],
+        )
+        node.insight = "Margins depend on rent and customer volume."
+        node.sources = [
+            {
+                "title": "Market report",
+                "url": "https://example.com/report",
+            },
+            {
+                "title": "Secondary report",
+                "url": "https://example.com/secondary",
+            },
+        ]
+        session.begin_operation()
+        await session.finish_operation()
+
+        artifact = session.artifact()
+
+        self.assertEqual(artifact["status"], "completed")
+        self.assertEqual(artifact["sessionId"], "session")
+        self.assertEqual(len(artifact["keyFindings"][0]["sources"]), 1)
+        self.assertEqual(
+            artifact["coverage"]["verticals"],
+            ["finance", "web"],
         )
 
 

@@ -19,6 +19,10 @@
       "description": "Add a focused follow-up question below an existing ExploreTree node."
     },
     {
+      "name": "get_research_results",
+      "description": "Retrieve the status and compact sourced findings for an existing ExploreTree research session."
+    },
+    {
       "name": "get_node_media",
       "description": "Load image and video references for a node. Reserved for the interactive widget."
     }
@@ -36,6 +40,7 @@
         "explore_tree",
         "expand_node",
         "add_followup",
+        "get_research_results",
         "get_node_media"
       ],
       "auth": {

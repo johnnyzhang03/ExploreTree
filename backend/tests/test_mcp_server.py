@@ -19,3 +19,12 @@ class ExploreTreeToolTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(properties["scope"]["anyOf"][0]["maxItems"], 8)
         self.assertEqual(properties["constraints"]["anyOf"][0]["maxItems"], 8)
+
+    async def test_results_tool_is_model_visible_without_widget_metadata(self) -> None:
+        tools = await mcp.list_tools()
+        tool = next(
+            item for item in tools if item.name == "get_research_results"
+        )
+
+        self.assertEqual(tool.inputSchema["required"], ["session_id"])
+        self.assertFalse(tool.meta)

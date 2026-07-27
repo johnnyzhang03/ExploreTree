@@ -121,6 +121,23 @@
       }
     },
     {
+      "name": "get_research_results",
+      "title": "Get research results",
+      "description": "Retrieve the current status and compact sourced findings for an existing ExploreTree research session. Use this before answering questions about completed research when the final artifact is not already present in model context.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "description": "The ExploreTree session identifier returned by explore_tree."
+          }
+        },
+        "required": [
+          "session_id"
+        ]
+      }
+    },
+    {
       "name": "get_node_media",
       "title": "Load node media",
       "description": "Load image and video references for an ExploreTree node.",

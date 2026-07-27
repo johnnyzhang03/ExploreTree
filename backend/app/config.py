@@ -1,8 +1,14 @@
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Deployments package their configuration in .env. Load it first with override
+# so stale App Service settings cannot silently shadow newly deployed values.
+load_dotenv(".env", override=True)
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(extra="ignore")
 
     bing_search_key: str = ""
     bing_search_endpoint: str = "https://api.microsoft.ai/v3/search/web"

@@ -5,7 +5,6 @@ export const VERTICALS = {
   news: { label: "News", color: "#d93025" },
   finance: { label: "Finance", color: "#188038" },
   places: { label: "Places", color: "#e8710a" },
-  videos: { label: "Videos", color: "#9334e6" },
 };
 
 // Verticals that actually produced sources, else the planned set; filtered to known.

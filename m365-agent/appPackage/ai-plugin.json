@@ -20,7 +20,7 @@
     },
     {
       "name": "get_research_results",
-      "description": "Retrieve the status and compact sourced findings for an existing ExploreTree research session."
+      "description": "Retrieve results for a previously started ExploreTree session only after the user asks about it in a later conversation turn. Never call this in the same turn as explore_tree."
     },
     {
       "name": "get_node_media",

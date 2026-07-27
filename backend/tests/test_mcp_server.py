@@ -28,3 +28,4 @@ class ExploreTreeToolTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(tool.inputSchema["required"], ["session_id"])
         self.assertFalse(tool.meta)
+        self.assertIn("Never call in the same conversation turn", tool.description)

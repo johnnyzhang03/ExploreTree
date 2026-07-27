@@ -176,7 +176,8 @@ async def explore_tree(
         (
             f"ExploreTree is researching this question in the interactive widget: "
             f"{brief.question}. Findings are still streaming, so do not answer from general "
-            "knowledge or claim that research is complete."
+            "knowledge or claim that research is complete. End this tool sequence now; "
+            "do not call get_research_results in the same conversation turn."
         ),
         _session_data(session),
     )
@@ -226,8 +227,9 @@ async def add_followup(
     name="get_research_results",
     description=(
         "Retrieve the current status and compact sourced findings for an existing "
-        "ExploreTree session. Use this before answering questions about completed "
-        "research when the final artifact is not already present in model context."
+        "ExploreTree session. Call only after the user sends a later message asking "
+        "about a previously started exploration. Never call in the same conversation "
+        "turn as explore_tree."
     ),
 )
 async def get_research_results(session_id: str) -> types.CallToolResult:

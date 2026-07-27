@@ -22,6 +22,38 @@
             "minimum": 1,
             "maximum": 4,
             "default": 2
+          },
+          "objective": {
+            "type": "string",
+            "description": "The decision, task, or outcome this research should support."
+          },
+          "audience": {
+            "type": "string",
+            "description": "Who will consume or act on the findings."
+          },
+          "scope": {
+            "type": "array",
+            "description": "Specific dimensions that the research must cover.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8
+          },
+          "constraints": {
+            "type": "array",
+            "description": "Boundaries, assumptions, exclusions, or requirements to respect.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8
+          },
+          "freshness": {
+            "type": "string",
+            "description": "How recent the evidence should be, such as 'last 12 months'."
+          },
+          "desired_output": {
+            "type": "string",
+            "description": "How the user intends to apply the research, such as an executive recommendation or comparison."
           }
         },
         "required": [

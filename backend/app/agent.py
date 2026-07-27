@@ -13,6 +13,7 @@ from typing import Awaitable, Callable
 from . import llm
 from .config import settings
 from .llm import PlannedTopic
+from .research_brief import ResearchBrief
 from .search import SEARCHERS, search_images, search_videos
 from .tree import Node, Tree
 
@@ -52,11 +53,18 @@ def _fallback_decompose(
 
 
 async def decompose(
-    question: str, parent_label: str = ""
+    question: str,
+    parent_label: str = "",
+    research_brief: ResearchBrief | None = None,
 ) -> list[PlannedTopic]:
     """Plan sub-topics (with routed verticals) via the LLM, falling back to template."""
     try:
-        subtopics = await llm.plan(question)
+        planner_input = (
+            research_brief.planning_prompt(question)
+            if research_brief
+            else question
+        )
+        subtopics = await llm.plan(planner_input)
     except Exception as error:  # boundary: LLM API — keep the run usable
         llm.record_error("plan", error)
         subtopics = []
@@ -113,7 +121,12 @@ async def _expand_node(tree: Tree, node_id: str, emit: Emit) -> None:
     await emit({"type": "node_updated", "node": node.to_dict()})
 
 
-async def _grow_children(tree: Tree, parent: Node, emit: Emit) -> list[Node]:
+async def _grow_children(
+    tree: Tree,
+    parent: Node,
+    emit: Emit,
+    research_brief: ResearchBrief | None = None,
+) -> list[Node]:
     """Decompose a parent into children, emit them, and expand all in parallel."""
     children = [
         tree.add(
@@ -123,7 +136,11 @@ async def _grow_children(tree: Tree, parent: Node, emit: Emit) -> list[Node]:
             verticals=topic.verticals,
             query=topic.query,
         )
-        for topic in await decompose(parent.query, parent.label)
+        for topic in await decompose(
+            parent.query,
+            parent.label,
+            research_brief=research_brief,
+        )
     ]
     for child in children:
         await emit({"type": "node_added", "node": child.to_dict()})
@@ -132,12 +149,17 @@ async def _grow_children(tree: Tree, parent: Node, emit: Emit) -> list[Node]:
     return children
 
 
-async def _pick_next(question: str, frontier: list[Node], breadth: int) -> list[Node]:
+async def _pick_next(
+    question: str,
+    frontier: list[Node],
+    breadth: int,
+    research_brief: ResearchBrief | None = None,
+) -> list[Node]:
     """Reflection: pick which frontier leaves to expand next (LLM, with fallback)."""
     by_id = {n.id: n for n in frontier}
     try:
         ids = await llm.reflect(
-            question,
+            research_brief.planning_prompt() if research_brief else question,
             [{"id": n.id, "label": n.label, "insight": n.insight} for n in frontier],
             breadth,
         )
@@ -154,6 +176,7 @@ async def explore(
     tree: Tree,
     max_depth: int | None = None,
     breadth: int | None = None,
+    research_brief: ResearchBrief | None = None,
 ) -> None:
     """Grow the tree: root → decompose → search/synthesize → reflect → repeat.
 
@@ -168,7 +191,12 @@ async def explore(
     await emit({"type": "node_added", "node": root.to_dict()})
 
     await emit({"type": "planning"})
-    frontier = await _grow_children(tree, root, emit)
+    frontier = await _grow_children(
+        tree,
+        root,
+        emit,
+        research_brief=research_brief,
+    )
 
     while frontier and frontier[0].depth < max_depth:
         await emit({"type": "planning"})
@@ -176,7 +204,12 @@ async def explore(
         frontier_ids = [n.id for n in frontier]
         await emit({"type": "node_state", "ids": frontier_ids, "state": "considering"})
 
-        picks = await _pick_next(question, frontier, breadth)
+        picks = await _pick_next(
+            question,
+            frontier,
+            breadth,
+            research_brief=research_brief,
+        )
 
         # clear the "considering" cue from everyone, then...
         await emit({"type": "node_state", "ids": frontier_ids, "state": None})
@@ -187,7 +220,17 @@ async def explore(
             {"type": "node_state", "ids": [p.id for p in picks], "state": "expanding"}
         )
 
-        grown = await asyncio.gather(*(_grow_children(tree, p, emit) for p in picks))
+        grown = await asyncio.gather(
+            *(
+                _grow_children(
+                    tree,
+                    p,
+                    emit,
+                    research_brief=research_brief,
+                )
+                for p in picks
+            )
+        )
         # the chosen parents are done expanding once their children exist
         await emit(
             {"type": "node_state", "ids": [p.id for p in picks], "state": None}
@@ -197,14 +240,24 @@ async def explore(
     await emit({"type": "done"})
 
 
-async def expand_on_demand(tree: Tree, node_id: str, emit: Emit) -> None:
+async def expand_on_demand(
+    tree: Tree,
+    node_id: str,
+    emit: Emit,
+    research_brief: ResearchBrief | None = None,
+) -> None:
     """User-driven: decompose a specific existing node into children and search them."""
     node = tree.nodes.get(node_id)
     if node is None:
         await emit({"type": "done"})
         return
     await emit({"type": "node_state", "ids": [node_id], "state": "expanding"})
-    await _grow_children(tree, node, emit)
+    await _grow_children(
+        tree,
+        node,
+        emit,
+        research_brief=research_brief,
+    )
     await emit({"type": "node_state", "ids": [node_id], "state": None})
     await emit({"type": "done"})
 

@@ -5,9 +5,9 @@
   "id": "${{TEAMS_APP_ID}}",
   "developer": {
     "name": "ExploreTree",
-    "websiteUrl": "https://github.com/johnnyzhang03/ExploreTree",
-    "privacyUrl": "https://github.com/johnnyzhang03/ExploreTree",
-    "termsOfUseUrl": "https://github.com/johnnyzhang03/ExploreTree"
+    "websiteUrl": "https://github.com/gim-home/ExploreTree",
+    "privacyUrl": "https://github.com/gim-home/ExploreTree",
+    "termsOfUseUrl": "https://github.com/gim-home/ExploreTree"
   },
   "icons": {
     "color": "color.png",

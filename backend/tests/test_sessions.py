@@ -23,6 +23,22 @@ class ExplorationSessionTests(unittest.IsolatedAsyncioTestCase):
         await session.unsubscribe(queue)
         self.assertEqual(session.subscribers, set())
 
+    async def test_snapshot_contains_default_research_brief(self) -> None:
+        session = ExplorationSession(id="session", question="question")
+
+        self.assertEqual(
+            session.snapshot()["brief"],
+            {
+                "question": "question",
+                "objective": "",
+                "audience": "",
+                "scope": [],
+                "constraints": [],
+                "freshness": "",
+                "desiredOutput": "",
+            },
+        )
+
 
 class SessionManagerTests(unittest.TestCase):
     def test_unknown_session_raises_specific_error(self) -> None:

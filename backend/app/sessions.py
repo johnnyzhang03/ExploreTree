@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from .agent import add_followup, expand_on_demand, explore, get_media
 from .config import settings
+from .research_brief import ResearchBrief
 from .tree import Tree
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ class SessionNotFoundError(KeyError):
 class ExplorationSession:
     id: str
     question: str
+    brief: ResearchBrief | None = None
     tree: Tree = field(default_factory=Tree)
     events: list[dict] = field(default_factory=list)
     subscribers: set[asyncio.Queue] = field(default_factory=set)
@@ -49,9 +51,11 @@ class ExplorationSession:
             self.subscribers.discard(queue)
 
     def snapshot(self) -> dict:
+        brief = self.brief or ResearchBrief.create(self.question)
         return {
             "sessionId": self.id,
             "question": self.question,
+            "brief": brief.to_dict(),
             "nodes": [node.to_dict() for node in self.tree.nodes.values()],
         }
 
@@ -72,11 +76,17 @@ class SessionManager:
         self,
         question: str,
         *,
+        brief: ResearchBrief | None = None,
         max_depth: int | None = None,
         breadth: int | None = None,
     ) -> ExplorationSession:
         self._remove_expired()
-        session = ExplorationSession(id=str(uuid4()), question=question)
+        brief = brief or ResearchBrief.create(question)
+        session = ExplorationSession(
+            id=str(uuid4()),
+            question=question,
+            brief=brief,
+        )
         self._sessions[session.id] = session
         self._spawn(
             session,
@@ -86,6 +96,7 @@ class SessionManager:
                 session.tree,
                 max_depth=max_depth,
                 breadth=breadth,
+                research_brief=brief,
             ),
         )
         return session
@@ -96,7 +107,12 @@ class SessionManager:
             raise ValueError(f"Unknown node: {node_id}")
         self._spawn(
             session,
-            expand_on_demand(session.tree, node_id, session.publish),
+            expand_on_demand(
+                session.tree,
+                node_id,
+                session.publish,
+                research_brief=session.brief,
+            ),
         )
         return session
 

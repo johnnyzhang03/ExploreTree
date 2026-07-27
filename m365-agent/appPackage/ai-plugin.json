@@ -8,7 +8,7 @@
   "functions": [
     {
       "name": "explore_tree",
-      "description": "Research a complex question by decomposing it into a sourced knowledge tree."
+      "description": "Build a sourced, interactive evidence map for a complex question, decision, or investigation. Include the user's objective, audience, required scope, constraints, freshness needs, and desired outcome when known."
     },
     {
       "name": "expand_node",

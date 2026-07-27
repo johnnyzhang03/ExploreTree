@@ -4,7 +4,7 @@
 
 **[▶ Live demo](https://exploretree-demo-a2hze7c2dbabg2bp.eastus2-01.azurewebsites.net)** — ask a question and watch a knowledge tree grow, as browsable cards or a live map.
 
-You ask a complex question; an LLM agent decomposes it, searches across multiple Bing verticals, synthesizes insights, and grows a knowledge tree in real time — while you watch it think and steer where it goes next.
+You ask a complex question; Microsoft 365 Copilot can frame it as a structured research brief, then an LLM agent decomposes it, searches across multiple Bing verticals, synthesizes insights, and grows a knowledge tree in real time — while you watch it think and steer where it goes next.
 
 Unlike black-box research agents that only hand you a final report, **the tree *is* the reasoning process**: every node shows its insight, its sources, and how it was reached.
 
@@ -92,6 +92,14 @@ ExploreTree also exposes a remote Streamable HTTP MCP server at `/mcp`. The
 server-side session; the widget then receives live tree events over a
 session-scoped WebSocket. The `expand_node`, `add_followup`, and
 `get_node_media` tools operate on that same session.
+
+The MCP contract separates responsibilities between the host and ExploreTree.
+Microsoft 365 Copilot turns the conversation into a research brief containing
+the objective, audience, required scope, constraints, freshness, and desired
+outcome. ExploreTree executes the recursive research workflow and publishes a
+compact, sourced research artifact back into Copilot model context. Copilot can
+then synthesize, compare, recommend, or turn the evidence into downstream work
+without duplicating the interactive tree.
 
 The production frontend build is a self-contained HTML document so the MCP
 server can return it as the `ui://exploretree/main` resource with MIME type

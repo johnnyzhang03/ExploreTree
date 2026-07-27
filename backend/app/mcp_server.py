@@ -1,16 +1,20 @@
 """MCP tools and UI resource for Microsoft 365 Copilot."""
 
 from pathlib import Path
+from typing import Annotated
 from urllib.parse import urlsplit, urlunsplit
 
 from mcp import types
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from pydantic import Field
 
 from .config import settings
+from .research_brief import ResearchBrief
 from .sessions import SessionNotFoundError, sessions
 
 WIDGET_URI = "ui://exploretree/main-v2"
+BriefItems = Annotated[list[str], Field(max_length=8)]
 
 
 def _public_origin() -> str:
@@ -109,8 +113,10 @@ async def exploretree_widget() -> str:
 @mcp.tool(
     name="explore_tree",
     description=(
-        "Research a complex question by decomposing it into a sourced knowledge tree. "
-        "Depth and breadth must each be between 1 and 4."
+        "Build a sourced, interactive evidence map for a complex question, decision, "
+        "or investigation. Include the objective, audience, scope, constraints, "
+        "freshness, and desired output when known. Depth and breadth must each be "
+        "between 1 and 4."
     ),
     meta=tool_meta,
 )
@@ -118,17 +124,38 @@ async def explore_tree(
     question: str,
     depth: int = 3,
     breadth: int = 2,
+    objective: str = "",
+    audience: str = "",
+    scope: BriefItems | None = None,
+    constraints: BriefItems | None = None,
+    freshness: str = "",
+    desired_output: str = "",
 ) -> types.CallToolResult:
-    question = question.strip()
-    if not question:
+    if len(scope or []) > 8 or len(constraints or []) > 8:
+        return _error("Scope and constraints can each contain at most 8 items.")
+    brief = ResearchBrief.create(
+        question,
+        objective=objective,
+        audience=audience,
+        scope=scope,
+        constraints=constraints,
+        freshness=freshness,
+        desired_output=desired_output,
+    )
+    if not brief.question:
         return _error("Question must not be empty.")
     if not 1 <= depth <= 4 or not 1 <= breadth <= 4:
         return _error("Depth and breadth must each be between 1 and 4.")
-    session = sessions.start(question, max_depth=depth, breadth=breadth)
+    session = sessions.start(
+        brief.question,
+        brief=brief,
+        max_depth=depth,
+        breadth=breadth,
+    )
     return _result(
         (
             f"ExploreTree is researching this question in the interactive widget: "
-            f"{question}. Findings are still streaming, so do not answer from general "
+            f"{brief.question}. Findings are still streaming, so do not answer from general "
             "knowledge or claim that research is complete."
         ),
         _session_data(session),

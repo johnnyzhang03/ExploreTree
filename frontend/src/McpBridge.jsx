@@ -98,6 +98,22 @@ export function McpBridgeProvider({ children }) {
     [app, isConnected]
   );
 
+  const sendMessage = useCallback(
+    async (text) => {
+      if (!app || !isConnected || typeof app.sendMessage !== "function") {
+        throw new Error("The MCP host does not support follow-up messages.");
+      }
+      const result = await app.sendMessage({
+        role: "user",
+        content: [{ type: "text", text }],
+      });
+      if (result?.isError) {
+        throw new Error("The MCP host rejected the follow-up message.");
+      }
+    },
+    [app, isConnected]
+  );
+
   useEffect(() => {
     if (!app || !isConnected || typeof app.sendSizeChanged !== "function") return;
     let timer;
@@ -134,6 +150,7 @@ export function McpBridgeProvider({ children }) {
         openExternal,
         toggleFullscreen,
         updateModelContext,
+        sendMessage,
       }}
     >
       {children}

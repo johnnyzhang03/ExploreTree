@@ -68,6 +68,34 @@ function modelContextFor(artifact) {
   ].join("\n");
 }
 
+function completionSummaryFor(nodes) {
+  const allNodes = Object.values(nodes);
+  const root = allNodes.find((node) => node.parentId === null);
+  const findings = allNodes.filter(
+    (node) => node.parentId && node.status === "done" && node.insight
+  );
+  const sources = new Set(
+    findings.flatMap((node) =>
+      (node.sources || []).map((source) => source.url).filter(Boolean)
+    )
+  );
+  const gaps = findings.filter(
+    (node) =>
+      !(node.sources || []).length ||
+      node.insight === "(no results)" ||
+      node.insight?.startsWith("(search failed:")
+  );
+  const branches = root
+    ? allNodes.filter((node) => node.parentId === root.id).length
+    : 0;
+  return {
+    findings: findings.length,
+    sources: sources.size,
+    branches,
+    gaps: gaps.length,
+  };
+}
+
 // Map (depth, breadth) to a human "vibe" label shown next to the sliders.
 function vibeOf(depth, breadth) {
   const score = depth + breadth;
@@ -459,6 +487,7 @@ export default function App() {
     openExternal,
     toggleFullscreen,
     updateModelContext,
+    sendMessage,
   } = useMcpBridge();
   const [question, setQuestion] = useState(
     "What's driving the recent surge in AI chip demand?"
@@ -480,6 +509,7 @@ export default function App() {
   const nodesRef = useRef({});
   const briefRef = useRef(researchBrief);
   const sessionIdRef = useRef(sessionId);
+  const completionAnnouncementsRef = useRef(new Set());
   briefRef.current = researchBrief;
   sessionIdRef.current = sessionId;
 
@@ -543,24 +573,42 @@ export default function App() {
       } else if (msg.type === "done") {
         setStatus("Done");
         if (embedded) {
+          const completedSessionId = sessionIdRef.current;
+          if (
+            !completedSessionId ||
+            completionAnnouncementsRef.current.has(completedSessionId)
+          ) {
+            return;
+          }
+          completionAnnouncementsRef.current.add(completedSessionId);
           const artifact = researchArtifactFor(
-            sessionIdRef.current,
+            completedSessionId,
             briefRef.current,
             nodesRef.current
           );
-          updateModelContext(
-            modelContextFor(artifact),
-            artifact
-          ).catch((error) =>
-            console.warn("Failed to update Copilot model context", error)
-          );
+          const summary = completionSummaryFor(nodesRef.current);
+          updateModelContext(modelContextFor(artifact), artifact)
+            .then(() =>
+              sendMessage(
+                [
+                  `ExploreTree completed research session ${completedSessionId}.`,
+                  `Coverage: ${summary.findings} findings, ${summary.sources} sources, ${summary.branches} top-level branches, and ${summary.gaps} evidence gaps.`,
+                  "Briefly acknowledge that the research is ready, mention this coverage, and suggest three concise follow-up questions I could ask next.",
+                  "Do not summarize the findings unless I ask.",
+                ].join(" ")
+              )
+            )
+            .catch((error) => {
+              completionAnnouncementsRef.current.delete(completedSessionId);
+              console.warn("Failed to notify Copilot of completion", error);
+            });
         }
       } else if (msg.type === "error") {
         setStatus(msg.message || "Error");
       }
     };
     return () => ws.close();
-  }, [embedded, streamUrl, updateModelContext]);
+  }, [embedded, sendMessage, streamUrl, updateModelContext]);
 
   const ask = () => {
     if (embedded) return;
@@ -582,7 +630,9 @@ export default function App() {
   const send = async (payload) => {
     if (embedded) {
       if (!sessionId || !mcpConnected) return;
-      if (payload.type !== "get_media") setStatus("Working…");
+      if (payload.type !== "get_media") {
+        setStatus("Working…");
+      }
       try {
         if (payload.type === "expand_node") {
           await callTool("expand_node", {
@@ -642,7 +692,6 @@ export default function App() {
     status === "Planning…" ||
     nodeStates[pageNodeId] === "expanding" ||
     nodeStates[pageNodeId] === "considering";
-
   // Fetch media as soon as a node's panel is opened. Media is keyed off the
   // node's label (set at creation), so it does NOT need the node's search to
   // finish — fetching on selection lets thumbnails stream in while the tree

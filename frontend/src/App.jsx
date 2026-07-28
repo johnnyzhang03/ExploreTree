@@ -68,34 +68,6 @@ function modelContextFor(artifact) {
   ].join("\n");
 }
 
-function completionSummaryFor(nodes) {
-  const allNodes = Object.values(nodes);
-  const root = allNodes.find((node) => node.parentId === null);
-  const findings = allNodes.filter(
-    (node) => node.parentId && node.status === "done" && node.insight
-  );
-  const sources = new Set(
-    findings.flatMap((node) =>
-      (node.sources || []).map((source) => source.url).filter(Boolean)
-    )
-  );
-  const gaps = findings.filter(
-    (node) =>
-      !(node.sources || []).length ||
-      node.insight === "(no results)" ||
-      node.insight?.startsWith("(search failed:")
-  );
-  const branches = root
-    ? allNodes.filter((node) => node.parentId === root.id).length
-    : 0;
-  return {
-    findings: findings.length,
-    sources: sources.size,
-    branches,
-    gaps: gaps.length,
-  };
-}
-
 // Map (depth, breadth) to a human "vibe" label shown next to the sliders.
 function vibeOf(depth, breadth) {
   const score = depth + breadth;
@@ -586,17 +558,9 @@ export default function App() {
             briefRef.current,
             nodesRef.current
           );
-          const summary = completionSummaryFor(nodesRef.current);
           updateModelContext(modelContextFor(artifact), artifact)
             .then(() =>
-              sendMessage(
-                [
-                  `ExploreTree completed research session ${completedSessionId}.`,
-                  `Coverage: ${summary.findings} findings, ${summary.sources} sources, ${summary.branches} top-level branches, and ${summary.gaps} evidence gaps.`,
-                  "Briefly acknowledge that the research is ready, mention this coverage, and suggest three concise follow-up questions I could ask next.",
-                  "Do not summarize the findings unless I ask.",
-                ].join(" ")
-              )
+              sendMessage("Exploration complete — summarize the findings.")
             )
             .catch((error) => {
               completionAnnouncementsRef.current.delete(completedSessionId);

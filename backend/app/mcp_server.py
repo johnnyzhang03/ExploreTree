@@ -15,6 +15,7 @@ from .sessions import SessionNotFoundError, sessions
 
 WIDGET_URI = "ui://exploretree/main-v2"
 BriefItems = Annotated[list[str], Field(max_length=8)]
+BranchIds = Annotated[list[str], Field(min_length=1, max_length=2)]
 
 
 def _public_origin() -> str:
@@ -83,9 +84,14 @@ def _artifact_text(artifact: dict) -> str:
     for finding in artifact["keyFindings"]:
         source = finding["sources"][0]["url"] if finding["sources"] else ""
         suffix = f" Source: {source}" if source else ""
+        coverage = finding["evidenceCoverage"]
+        evidence = (
+            f" Evidence coverage: {coverage['sourceCount']} unique sources "
+            f"across {coverage['domainCount']} domains."
+        )
         lines.append(
             f"- [{finding['nodeId']}] {finding['title']}: "
-            f"{finding['insight']}{suffix}"
+            f"{finding['insight']}{evidence}{suffix}"
         )
     return "\n".join(lines)
 
@@ -110,8 +116,9 @@ mcp = FastMCP(
     "ExploreTree",
     instructions=(
         "Use ExploreTree to research complex questions as a visible knowledge tree. "
-        "Start with explore_tree, then use expand_node or add_followup to investigate "
-        "specific branches."
+        "Start with explore_tree. Use get_tree_outline and get_branch_context to "
+        "understand existing branches, then expand_node or add_followup to investigate "
+        "them further."
     ),
     host="0.0.0.0",
     transport_security=TransportSecuritySettings(
@@ -239,6 +246,52 @@ async def get_research_results(session_id: str) -> types.CallToolResult:
         return _error("The exploration session was not found or has expired.")
     artifact = session.artifact()
     return _result(_artifact_text(artifact), artifact)
+
+
+@mcp.tool(
+    name="get_tree_outline",
+    description=(
+        "Retrieve compact semantic metadata and stable node IDs for an existing "
+        "ExploreTree session. Use this to resolve a branch mentioned by the user "
+        "before expanding it, adding a follow-up, or requesting branch context."
+    ),
+)
+async def get_tree_outline(session_id: str) -> types.CallToolResult:
+    try:
+        session = sessions.get(session_id)
+    except SessionNotFoundError:
+        return _error("The exploration session was not found or has expired.")
+    outline = session.tree_outline()
+    return _result(
+        "Use this compact tree outline to resolve branch names to node IDs.",
+        outline,
+    )
+
+
+@mcp.tool(
+    name="get_branch_context",
+    description=(
+        "Retrieve compact sourced context for one or two branches in an existing "
+        "ExploreTree session. Use two node IDs when the user asks to compare branches."
+    ),
+)
+async def get_branch_context(
+    session_id: str,
+    node_ids: BranchIds,
+) -> types.CallToolResult:
+    if not 1 <= len(node_ids) <= 2:
+        return _error("Provide one or two node IDs.")
+    try:
+        session = sessions.get(session_id)
+        context = session.branch_context(node_ids)
+    except SessionNotFoundError:
+        return _error("The exploration session was not found or has expired.")
+    except ValueError as exc:
+        return _error(str(exc))
+    return _result(
+        "Use this branch context to discuss or compare the selected branches.",
+        context,
+    )
 
 
 @mcp.tool(

@@ -94,10 +94,28 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
         await websocket.close(code=4404)
         return
     await websocket.accept()
+    forward_task = asyncio.create_task(_forward_session(websocket, session_id))
     try:
-        await _forward_session(websocket, session_id)
+        while True:
+            message = await websocket.receive_json()
+            if message.get("type") == "claim_completion_handoff":
+                session = sessions.get(session_id)
+                claimed = await session.claim_completion_handoff()
+                await session.publish(
+                    {
+                        "type": "completion_handoff_claim",
+                        "client_id": message.get("client_id"),
+                        "claimed": claimed,
+                    }
+                )
+            elif message.get("type") == "release_completion_handoff":
+                await sessions.get(session_id).release_completion_handoff()
     except (WebSocketDisconnect, SessionNotFoundError, RuntimeError):
         return
+    finally:
+        forward_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await forward_task
 
 
 @app.websocket("/ws")

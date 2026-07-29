@@ -138,6 +138,47 @@
       }
     },
     {
+      "name": "get_tree_outline",
+      "title": "Get research tree outline",
+      "description": "Retrieve compact semantic metadata and stable node IDs for an existing ExploreTree session. Use this to resolve a branch mentioned by the user before expanding it, adding a follow-up, or requesting branch context.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ]
+      }
+    },
+    {
+      "name": "get_branch_context",
+      "title": "Get research branch context",
+      "description": "Retrieve compact sourced context for one or two branches in an existing ExploreTree session. Use two node IDs when the user asks to compare branches.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "node_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 2
+          }
+        },
+        "required": [
+          "session_id",
+          "node_ids"
+        ]
+      }
+    },
+    {
       "name": "get_node_media",
       "title": "Load node media",
       "description": "Load image and video references for an ExploreTree node.",

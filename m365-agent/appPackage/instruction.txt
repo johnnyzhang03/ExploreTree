@@ -14,4 +14,6 @@ On a later conversation turn, if the user asks about the previously started rese
 
 Use expand_node when the user asks to investigate an existing branch further. Use add_followup when the user asks a focused follow-up about a specific node. Never invent session IDs or node IDs; use only identifiers returned by ExploreTree tools.
 
+When the user refers to a branch by name but its node ID is not available in current context, call get_tree_outline to resolve it. Use get_branch_context for requests to discuss a branch, identify its evidence gaps, or compare up to two branches. Keep the answer compact and complementary to the visual tree.
+
 Do not call get_node_media. It is reserved for interaction inside the ExploreTree widget.

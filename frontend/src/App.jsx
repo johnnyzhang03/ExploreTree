@@ -29,12 +29,23 @@ function completionArtifactFor(sessionId, brief, nodes) {
       (node.sources || []).map((source) => source.url).filter(Boolean)
     )
   ).size;
+  const domains = new Set(
+    completedNodes.flatMap((node) =>
+      (node.sources || []).map((source) => source.domain).filter(Boolean)
+    )
+  );
+  const datedSourceCount = new Set(
+    completedNodes.flatMap((node) =>
+      (node.sources || []).map((source) => source.publishedAt).filter(Boolean)
+    )
+  ).size;
   const root = allNodes.find((node) => node.parentId === null);
   const branchCount = root
     ? allNodes.filter((node) => node.parentId === root.id).length
     : 0;
   const allEvidenceGaps = completedNodes.filter(
-    (node) => !(node.sources || []).length
+    (node) =>
+      node.evidenceCoverage?.gaps?.noEvidence ?? !(node.sources || []).length
   );
 
   return {
@@ -45,6 +56,8 @@ function completionArtifactFor(sessionId, brief, nodes) {
     coverage: {
       completedNodes: completedNodes.length,
       sources: sourceCount,
+      domains: domains.size,
+      datedSources: datedSourceCount,
       topLevelBranches: branchCount,
       evidenceGaps: allEvidenceGaps.length,
       maximumDepth: Math.max(0, ...completedNodes.map((node) => node.depth || 0)),
@@ -60,6 +73,77 @@ function modelContextFor(artifact) {
     "Do not infer, summarize, or discuss any findings from prior knowledge or conversation context.",
     `On a later turn requesting insights, call get_research_results with session ID ${artifact.sessionId} before answering.`,
     JSON.stringify(artifact),
+  ].join("\n");
+}
+
+function branchContextFor(sessionId, selectedId, nodes) {
+  const selected = nodes[selectedId];
+  const children = {};
+  Object.values(nodes).forEach((node) => {
+    if (!node.parentId) return;
+    if (!children[node.parentId]) children[node.parentId] = [];
+    children[node.parentId].push(node.id);
+  });
+
+  const path = [];
+  const seen = new Set();
+  let current = selected;
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    path.push({ nodeId: current.id, title: current.label });
+    current = current.parentId ? nodes[current.parentId] : null;
+  }
+
+  const pending = [selectedId];
+  const findings = [];
+  while (pending.length && findings.length < 12) {
+    const nodeId = pending.shift();
+    const node = nodes[nodeId];
+    if (!node) continue;
+    findings.push({
+      nodeId: node.id,
+      parentId: node.parentId,
+      title: node.label,
+      status: node.status,
+      insight: node.insight || "",
+      evidenceCount:
+        node.evidenceCoverage?.sourceCount ?? (node.sources || []).length,
+      evidenceCoverage: node.evidenceCoverage,
+      sources: (node.sources || [])
+        .filter((source) => source.url)
+        .slice(0, 2)
+        .map((source) => ({
+          title: source.title || source.url,
+          url: source.url,
+          domain: source.domain,
+          publishedAt: source.publishedAt,
+        })),
+    });
+    pending.push(...(children[nodeId] || []));
+  }
+
+  return {
+    type: "exploretree.branch-context",
+    sessionId,
+    status: "selected",
+    branches: [
+      {
+        nodeId: selected.id,
+        title: selected.label,
+        path: path.reverse(),
+        findings,
+        truncated: pending.length > 0,
+      },
+    ],
+  };
+}
+
+function branchModelContextFor(context) {
+  return [
+    "The user explicitly selected this ExploreTree branch for discussion.",
+    "Use only the compact branch context below. Do not imply that it contains the full research tree.",
+    "Discuss what the branch establishes, its evidence gaps, or its relevance to the user's request. Cite supplied source URLs when relevant.",
+    JSON.stringify(context),
   ].join("\n");
 }
 
@@ -278,6 +362,8 @@ function SidePanel({
   onClose,
   openExternal,
   showFollowup,
+  showDiscuss,
+  onDiscuss,
 }) {
   const [followup, setFollowup] = useState("");
   if (!node) return null;
@@ -285,6 +371,7 @@ function SidePanel({
   const financeData = allSources.filter((s) => s.finance).map((s) => s.finance);
   // videos render in their own thumbnail section below; finance has its own card
   const sources = allSources.filter((s) => !s.finance && s.vertical !== "videos");
+  const coverage = node.evidenceCoverage;
   const canExpand = isLeaf && node.status === "done";
   const images = media?.images || [];
   const videos = media?.videos || [];
@@ -317,6 +404,51 @@ function SidePanel({
             ? "searching…"
             : "pending…"}
         </p>
+
+        {coverage && node.parentId && node.status === "done" && (
+          <>
+            <div className="panel-section-label">Evidence coverage</div>
+            <div className="panel-coverage">
+              <div className="coverage-metric">
+                <strong>{coverage.sourceCount}</strong>
+                <span>unique sources</span>
+              </div>
+              <div className="coverage-metric">
+                <strong>{coverage.domainCount}</strong>
+                <span>domains</span>
+              </div>
+              <div className="coverage-metric">
+                <strong>{coverage.verticalCount}</strong>
+                <span>verticals</span>
+              </div>
+              <div className="coverage-metric">
+                <strong>{coverage.datedSourceCount}</strong>
+                <span>dated sources</span>
+              </div>
+            </div>
+            {coverage.dateRange && (
+              <p className="coverage-date-range">
+                Published {coverage.dateRange.oldest}
+                {coverage.dateRange.newest !== coverage.dateRange.oldest &&
+                  ` to ${coverage.dateRange.newest}`}
+              </p>
+            )}
+            {coverage.gaps?.noEvidence && (
+              <p className="coverage-gap">No supporting search evidence was found.</p>
+            )}
+            {!coverage.gaps?.noEvidence && coverage.gaps?.singleDomain && (
+              <p className="coverage-gap">
+                Evidence comes from a single domain.
+              </p>
+            )}
+          </>
+        )}
+
+        {showDiscuss && (
+          <button className="panel-discuss" onClick={() => onDiscuss(node.id)}>
+            Discuss in Copilot
+          </button>
+        )}
 
         {canExpand && (
           <button className="panel-expand" onClick={() => onExpand(node.id)}>
@@ -477,6 +609,10 @@ export default function App() {
   const briefRef = useRef(researchBrief);
   const sessionIdRef = useRef(sessionId);
   const completionAnnouncementsRef = useRef(new Set());
+  const clientIdRef = useRef(
+    globalThis.crypto?.randomUUID?.() ||
+      `widget-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
   briefRef.current = researchBrief;
   sessionIdRef.current = sessionId;
 
@@ -548,6 +684,20 @@ export default function App() {
             return;
           }
           completionAnnouncementsRef.current.add(completedSessionId);
+          ws.send(
+            JSON.stringify({
+              type: "claim_completion_handoff",
+              client_id: clientIdRef.current,
+            })
+          );
+        }
+      } else if (
+        msg.type === "completion_handoff_claim" &&
+        msg.client_id === clientIdRef.current &&
+        msg.claimed
+      ) {
+        const completedSessionId = sessionIdRef.current;
+        if (embedded && completedSessionId) {
           const artifact = completionArtifactFor(
             completedSessionId,
             briefRef.current,
@@ -557,6 +707,9 @@ export default function App() {
             .then(() => sendMessage("Exploration complete."))
             .catch((error) => {
               completionAnnouncementsRef.current.delete(completedSessionId);
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "release_completion_handoff" }));
+              }
               console.warn("Failed to notify Copilot of completion", error);
             });
         }
@@ -619,6 +772,20 @@ export default function App() {
   const expandNode = (id) => send({ type: "expand_node", node_id: id });
   const followup = (id, query) =>
     send({ type: "followup", parent_id: id, query });
+  const discussBranch = async (id) => {
+    if (!embedded || !sessionId || !nodes[id]) return;
+    const context = branchContextFor(sessionId, id, nodes);
+    setStatus("Sharing branch…");
+    try {
+      await updateModelContext(branchModelContextFor(context), context);
+      await sendMessage(`Discuss the "${nodes[id].label}" branch.`);
+      setStatus((current) =>
+        current === "Sharing branch…" ? "Ready" : current
+      );
+    } catch (error) {
+      setStatus(error.message || "Failed to share branch");
+    }
+  };
 
   // a node is an unexpanded leaf if nothing else points to it as parent
   const parentIds = new Set(
@@ -758,6 +925,8 @@ export default function App() {
           onClose={() => setSelectedId(null)}
           openExternal={openExternal}
           showFollowup={!embedded}
+          showDiscuss={embedded && mcpConnected}
+          onDiscuss={discussBranch}
         />
       </div>
     </div>

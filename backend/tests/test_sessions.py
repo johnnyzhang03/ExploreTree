@@ -34,6 +34,18 @@ class ExplorationSessionTests(unittest.IsolatedAsyncioTestCase):
         await session.finish_operation()
         self.assertEqual(session.status, "completed")
 
+    async def test_completion_handoff_can_only_be_claimed_once(self) -> None:
+        session = ExplorationSession(id="session", question="question")
+
+        claims = await asyncio.gather(
+            session.claim_completion_handoff(),
+            session.claim_completion_handoff(),
+        )
+
+        self.assertEqual(sorted(claims), [False, True])
+        await session.release_completion_handoff()
+        self.assertTrue(await session.claim_completion_handoff())
+
     async def test_snapshot_contains_default_research_brief(self) -> None:
         session = ExplorationSession(id="session", question="question")
 
@@ -64,10 +76,16 @@ class ExplorationSessionTests(unittest.IsolatedAsyncioTestCase):
             {
                 "title": "Market report",
                 "url": "https://example.com/report",
+                "domain": "example.com",
+                "vertical": "web",
+                "publishedAt": "2026-07-20",
             },
             {
                 "title": "Secondary report",
-                "url": "https://example.com/secondary",
+                "url": "https://analysis.test/secondary",
+                "domain": "analysis.test",
+                "vertical": "finance",
+                "publishedAt": "2026-07-20",
             },
         ]
         session.begin_operation()
@@ -81,6 +99,49 @@ class ExplorationSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             artifact["coverage"]["verticals"],
             ["finance", "web"],
+        )
+        self.assertEqual(artifact["coverage"]["evidence"]["sourceCount"], 2)
+        self.assertEqual(artifact["coverage"]["evidence"]["domainCount"], 2)
+        self.assertEqual(artifact["coverage"]["evidence"]["datedSourceCount"], 2)
+        self.assertEqual(
+            artifact["keyFindings"][0]["evidenceCoverage"]["dateRange"],
+            {"oldest": "2026-07-20", "newest": "2026-07-20"},
+        )
+        self.assertEqual(artifact["treeOutline"][0]["nodeId"], node.id)
+
+    async def test_tree_outline_contains_branch_metadata(self) -> None:
+        session = ExplorationSession(id="session", question="question")
+        root = session.tree.add("Question", None, status="done", depth=0)
+        child = session.tree.add(
+            "Regulatory risk",
+            root.id,
+            status="done",
+            depth=1,
+        )
+        child.insight = "Licensing requirements vary by market."
+        child.sources = [{"url": "https://example.com/rules"}]
+
+        outline = session.tree_outline()
+
+        item = next(node for node in outline["nodes"] if node["nodeId"] == child.id)
+        self.assertEqual(item["path"], ["Question", "Regulatory risk"])
+        self.assertEqual(item["evidenceCount"], 1)
+        self.assertTrue(item["evidenceCoverage"]["gaps"]["singleSource"])
+        self.assertEqual(item["childCount"], 0)
+
+    async def test_branch_context_returns_selected_subtree(self) -> None:
+        session = ExplorationSession(id="session", question="question")
+        root = session.tree.add("Question", None, status="done", depth=0)
+        branch = session.tree.add("Market", root.id, status="done", depth=1)
+        child = session.tree.add("Demand", branch.id, status="done", depth=2)
+        child.insight = "Demand is increasing."
+
+        context = session.branch_context([branch.id])
+
+        self.assertEqual(context["branches"][0]["nodeId"], branch.id)
+        self.assertEqual(
+            [item["nodeId"] for item in context["branches"][0]["findings"]],
+            [branch.id, child.id],
         )
 
 

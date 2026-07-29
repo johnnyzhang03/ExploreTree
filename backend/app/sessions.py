@@ -9,13 +9,18 @@ from uuid import uuid4
 from .agent import add_followup, expand_on_demand, explore, get_media
 from .config import settings
 from .research_brief import ResearchBrief
-from .tree import Tree
+from .tree import Tree, evidence_coverage
 
 logger = logging.getLogger(__name__)
 
 
 class SessionNotFoundError(KeyError):
     pass
+
+
+def _compact_text(value: str, limit: int = 320) -> str:
+    value = " ".join(value.split())
+    return value if len(value) <= limit else value[: limit - 1].rstrip() + "…"
 
 
 @dataclass
@@ -30,6 +35,7 @@ class ExplorationSession:
     tasks: set[asyncio.Task] = field(default_factory=set)
     active_operations: int = 0
     operation_failed: bool = False
+    completion_handoff_claimed: bool = False
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     last_accessed: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -68,6 +74,17 @@ class ExplorationSession:
         async with self.lock:
             self.subscribers.discard(queue)
 
+    async def claim_completion_handoff(self) -> bool:
+        async with self.lock:
+            if self.completion_handoff_claimed:
+                return False
+            self.completion_handoff_claimed = True
+            return True
+
+    async def release_completion_handoff(self) -> None:
+        async with self.lock:
+            self.completion_handoff_claimed = False
+
     def snapshot(self) -> dict:
         brief = self.brief or ResearchBrief.create(self.question)
         return {
@@ -76,6 +93,117 @@ class ExplorationSession:
             "brief": brief.to_dict(),
             "status": self.status,
             "nodes": [node.to_dict() for node in self.tree.nodes.values()],
+        }
+
+    def _path_to(self, node_id: str) -> list[dict]:
+        path = []
+        seen = set()
+        current = self.tree.nodes[node_id]
+        while current and current.id not in seen:
+            seen.add(current.id)
+            path.append({"nodeId": current.id, "title": current.label})
+            current = (
+                self.tree.nodes.get(current.parent_id)
+                if current.parent_id
+                else None
+            )
+        return list(reversed(path))
+
+    def tree_outline(self, limit: int = 80) -> dict:
+        children: dict[str, list[str]] = {}
+        for node in self.tree.nodes.values():
+            if node.parent_id:
+                children.setdefault(node.parent_id, []).append(node.id)
+
+        ordered = sorted(
+            self.tree.nodes.values(),
+            key=lambda node: (node.depth, node.id),
+        )
+        nodes = []
+        for node in ordered[:limit]:
+            coverage = evidence_coverage(node.sources)
+            nodes.append({
+                "nodeId": node.id,
+                "parentId": node.parent_id,
+                "title": node.label,
+                "path": [item["title"] for item in self._path_to(node.id)],
+                "status": node.status,
+                "childCount": len(children.get(node.id, [])),
+                "evidenceCount": coverage["sourceCount"],
+                "evidenceCoverage": coverage,
+                "insight": _compact_text(node.insight, 180),
+            })
+        return {
+            "type": "exploretree.tree-outline",
+            "sessionId": self.id,
+            "status": self.status,
+            "nodes": nodes,
+            "truncated": len(ordered) > limit,
+        }
+
+    def branch_context(self, node_ids: list[str], limit: int = 12) -> dict:
+        unknown = [node_id for node_id in node_ids if node_id not in self.tree.nodes]
+        if unknown:
+            raise ValueError(f"Unknown node: {unknown[0]}")
+
+        children: dict[str, list[str]] = {}
+        for node in self.tree.nodes.values():
+            if node.parent_id:
+                children.setdefault(node.parent_id, []).append(node.id)
+
+        branches = []
+        for node_id in dict.fromkeys(node_ids):
+            root = self.tree.nodes[node_id]
+            pending = [node_id]
+            subtree_ids = []
+            while pending:
+                current_id = pending.pop(0)
+                subtree_ids.append(current_id)
+                pending.extend(children.get(current_id, []))
+
+            subtree = sorted(
+                (self.tree.nodes[item_id] for item_id in subtree_ids),
+                key=lambda node: (node.depth, node.id),
+            )
+            findings = []
+            for node in subtree[:limit]:
+                coverage = evidence_coverage(node.sources)
+                findings.append(
+                    {
+                        "nodeId": node.id,
+                        "parentId": node.parent_id,
+                        "title": node.label,
+                        "status": node.status,
+                        "insight": _compact_text(node.insight),
+                        "evidenceCount": coverage["sourceCount"],
+                        "evidenceCoverage": coverage,
+                        "sources": [
+                            {
+                                "title": source.get("title") or source.get("url"),
+                                "url": source.get("url"),
+                                "domain": source.get("domain"),
+                                "publishedAt": source.get("publishedAt"),
+                            }
+                            for source in node.sources
+                            if source.get("url")
+                        ][:2],
+                    }
+                )
+            branches.append(
+                {
+                    "nodeId": root.id,
+                    "title": root.label,
+                    "path": self._path_to(root.id),
+                    "findings": findings,
+                    "truncated": len(subtree) > limit,
+                }
+            )
+
+        return {
+            "type": "exploretree.branch-context",
+            "sessionId": self.id,
+            "status": self.status,
+            "branches": branches,
         }
 
     def artifact(self, limit: int = 8) -> dict:
@@ -90,10 +218,13 @@ class ExplorationSession:
         )
         findings = []
         for node in completed[:limit]:
+            node_coverage = evidence_coverage(node.sources)
             sources = [
                 {
                     "title": source.get("title") or source.get("url"),
                     "url": source.get("url"),
+                    "domain": source.get("domain"),
+                    "publishedAt": source.get("publishedAt"),
                 }
                 for source in node.sources
                 if source.get("url")
@@ -104,9 +235,16 @@ class ExplorationSession:
                     "title": node.label,
                     "insight": node.insight,
                     "verticals": node.verticals,
+                    "evidenceCoverage": node_coverage,
                     "sources": sources,
                 }
             )
+        all_sources = [
+            source
+            for node in completed
+            for source in node.sources
+        ]
+        aggregate_coverage = evidence_coverage(all_sources)
         return {
             "type": "exploretree.research-artifact",
             "sessionId": self.id,
@@ -125,8 +263,14 @@ class ExplorationSession:
                         for vertical in node.verticals
                     }
                 ),
+                "evidence": aggregate_coverage,
+                "evidenceGapNodes": sum(
+                    evidence_coverage(node.sources)["gaps"]["noEvidence"]
+                    for node in completed
+                ),
             },
             "keyFindings": findings,
+            "treeOutline": self.tree_outline()["nodes"],
         }
 
 

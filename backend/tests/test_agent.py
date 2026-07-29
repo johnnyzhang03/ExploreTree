@@ -2,6 +2,7 @@ import unittest
 
 from app import llm
 from app.agent import _fallback_decompose
+from app.search import SearchResult, deduplicate_results
 from app.tree import Tree
 
 
@@ -27,6 +28,33 @@ class CardImageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await tree.claim_card_image(images), images[0])
         self.assertEqual(await tree.claim_card_image(images), images[1])
         self.assertEqual(await tree.claim_card_image(images), {})
+
+
+class SearchResultTests(unittest.TestCase):
+    def test_source_metadata_and_tracking_url_deduplication(self) -> None:
+        results = [
+            SearchResult(
+                title="First",
+                url="https://www.example.com/report?utm_source=newsletter",
+                snippet="One",
+                published_at="2026-07-28",
+            ),
+            SearchResult(
+                title="Duplicate",
+                url="https://example.com/report",
+                snippet="Two",
+            ),
+        ]
+
+        unique = deduplicate_results(results)
+
+        self.assertEqual(len(unique), 1)
+        self.assertEqual(unique[0].to_dict()["domain"], "example.com")
+        self.assertEqual(
+            unique[0].to_dict()["canonicalUrl"],
+            "https://example.com/report",
+        )
+        self.assertEqual(unique[0].to_dict()["publishedAt"], "2026-07-28")
 
 
 class ProviderDiagnosticsTests(unittest.TestCase):

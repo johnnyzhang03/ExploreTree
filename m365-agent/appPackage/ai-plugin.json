@@ -23,6 +23,14 @@
       "description": "Retrieve results for a previously started ExploreTree session only after the user asks about it in a later conversation turn. Never call this in the same turn as explore_tree."
     },
     {
+      "name": "get_tree_outline",
+      "description": "Retrieve compact semantic metadata and stable node IDs for an existing ExploreTree session."
+    },
+    {
+      "name": "get_branch_context",
+      "description": "Retrieve compact sourced context for one or two branches in an existing ExploreTree session."
+    },
+    {
       "name": "get_node_media",
       "description": "Load image and video references for a node. Reserved for the interactive widget."
     }
@@ -41,6 +49,8 @@
         "expand_node",
         "add_followup",
         "get_research_results",
+        "get_tree_outline",
+        "get_branch_context",
         "get_node_media"
       ],
       "auth": {

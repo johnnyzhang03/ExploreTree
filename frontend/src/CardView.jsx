@@ -3,6 +3,26 @@ import { VERTICALS, nodeVerticals } from "./verticals.js";
 
 const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
+function CoverageLine({ coverage }) {
+  if (!coverage) return null;
+  if (coverage.gaps?.noEvidence) {
+    return <div className="card-coverage card-coverage--gap">Evidence gap</div>;
+  }
+  return (
+    <div className="card-coverage">
+      {coverage.sourceCount} source{coverage.sourceCount === 1 ? "" : "s"}
+      <span>·</span>
+      {coverage.domainCount} domain{coverage.domainCount === 1 ? "" : "s"}
+      {coverage.datedSourceCount > 0 && (
+        <>
+          <span>·</span>
+          {coverage.datedSourceCount} dated
+        </>
+      )}
+    </div>
+  );
+}
+
 function Breadcrumb({ trail, onCrumb }) {
   return (
     <nav className="breadcrumb" aria-label="Breadcrumb">
@@ -60,6 +80,9 @@ function Card({ node, childCount, childrenGrowing, onOpen, onDrill }) {
             ? "searching…"
             : "pending…"}
         </p>
+        {node.status === "done" && (
+          <CoverageLine coverage={node.evidenceCoverage} />
+        )}
         <div className="card-badges">
           {verticals.map((v) => (
             <span key={v} className={`src-badge src-${v}`}>

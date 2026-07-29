@@ -14,7 +14,7 @@ from . import llm
 from .config import settings
 from .llm import PlannedTopic
 from .research_brief import ResearchBrief
-from .search import SEARCHERS, search_images, search_videos
+from .search import SEARCHERS, deduplicate_results, search_images, search_videos
 from .tree import Node, Tree
 
 Emit = Callable[[dict], Awaitable[None]]
@@ -98,6 +98,7 @@ async def _expand_node(tree: Tree, node_id: str, emit: Emit) -> None:
         if isinstance(group, BaseException):
             continue
         results.extend(group)
+    results = deduplicate_results(results)
 
     if not results:
         node.status = "done"

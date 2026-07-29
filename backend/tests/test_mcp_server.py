@@ -29,3 +29,11 @@ class ExploreTreeToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tool.inputSchema["required"], ["session_id"])
         self.assertFalse(tool.meta)
         self.assertIn("Never call in the same conversation turn", tool.description)
+
+    async def test_branch_read_tools_are_model_visible(self) -> None:
+        tools = {tool.name: tool for tool in await mcp.list_tools()}
+
+        self.assertFalse(tools["get_tree_outline"].meta)
+        self.assertFalse(tools["get_branch_context"].meta)
+        node_ids = tools["get_branch_context"].inputSchema["properties"]["node_ids"]
+        self.assertEqual(node_ids["maxItems"], 2)

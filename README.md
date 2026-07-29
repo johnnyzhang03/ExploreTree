@@ -90,8 +90,11 @@ m365-agent/   Microsoft 365 declarative-agent and MCP plugin package
 ExploreTree also exposes a remote Streamable HTTP MCP server at `/mcp`. The
 `explore_tree` tool returns an MCP App widget and starts research in a
 server-side session; the widget then receives live tree events over a
-session-scoped WebSocket. The `expand_node`, `add_followup`, and
-`get_node_media` tools operate on that same session.
+session-scoped WebSocket. `get_tree_outline` exposes compact semantic metadata
+and stable node IDs, while `get_branch_context` returns sourced context for one
+or two branches. The `expand_node`, `add_followup`, and `get_node_media` tools
+operate on that same session. Selecting **Discuss in Copilot** in the widget
+shares only that branch's compact context and begins a new conversation turn.
 
 The MCP contract separates responsibilities between the host and ExploreTree.
 Microsoft 365 Copilot turns the conversation into a research brief containing

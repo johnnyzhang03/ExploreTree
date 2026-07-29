@@ -2,9 +2,9 @@ from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-# Deployments package their configuration in .env. Load it first with override
-# so stale App Service settings cannot silently shadow newly deployed values.
-load_dotenv(".env", override=True)
+# Local development reads .env, while deployed environment variables remain
+# authoritative so App Service settings can be changed without rebuilding.
+load_dotenv(".env", override=False)
 
 
 class Settings(BaseSettings):

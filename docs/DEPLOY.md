@@ -80,7 +80,9 @@ az webapp config set `
 
 These are the same variables as `backend/.env.example`. Fill in your real
 values. App Service injects them as environment variables, which
-`pydantic-settings` reads (it falls back to env vars when there's no `.env`).
+`pydantic-settings` reads. App Service settings are authoritative; a local
+`backend/.env` is only a development fallback and must not be included in the
+deployment package.
 
 ```powershell
 az webapp config appsettings set `
@@ -130,6 +132,7 @@ az webapp config set `
 From the **repo root** in PowerShell, stage a clean deploy folder with:
 - `app/` and `requirements.txt` at the root (so Oryx finds requirements.txt)
 - `frontend/dist/` nested (matches `main.py`'s `../frontend/dist` lookup)
+- no `.env` file; deployed configuration comes from App Service settings
 
 ```powershell
 $stage = "deploy_pkg"
@@ -151,7 +154,10 @@ Compress-Archive -Path "$stage/*" -DestinationPath deploy.zip -Force
 Deploy:
 
 ```powershell
-az webapp deploy --name $APP --resource-group $RG --src-path deploy.zip --type zip
+az webapp deploy `
+  --name $APP --resource-group $RG `
+  --src-path deploy.zip --type zip `
+  --clean true --restart true
 ```
 
 ---
@@ -173,8 +179,22 @@ Then open **https://\<APP\>.azurewebsites.net** in a browser:
   (This confirms the **WSS** WebSocket connected — the frontend derives
   `wss://<host>/ws` from the page origin automatically.)
 
-If the page loads but nothing happens on Explore, re-check **step 3**
-(WebSockets enabled) and the browser console for a failed `wss://` connection.
+Do not treat `/health` or MCP tool discovery alone as a complete deployment
+check. Start a small depth-1 exploration and confirm that at least one node
+streams into the widget.
+
+If the widget remains on **Planning…** with no nodes:
+
+1. Confirm `PUBLIC_BASE_URL` is set to the exact public HTTPS origin:
+   `https://<APP>.azurewebsites.net`.
+2. Inspect the `explore_tree` result with MCP Inspector and confirm `streamUrl`
+   starts with `wss://<APP>.azurewebsites.net/ws/sessions/`, not
+   `ws://localhost:8000`.
+3. Re-check **step 3** (WebSockets enabled) and the browser console for a failed
+   `wss://` connection.
+4. Ensure no `.env` was deployed. Environment variables intentionally take
+   precedence over a local `.env`, so App Service settings can be corrected
+   without rebuilding the package.
 
 Logs:
 ```powershell
@@ -206,3 +226,5 @@ user before enabling multi-user production access.
 - **Frontend change:** `cd frontend && npm run build`, then repeat **step 6**.
 - **Backend change:** repeat **step 6** (no rebuild needed).
 - App Settings/secrets persist across deploys — only re-run **step 4** to change them.
+- After every redeploy, run the depth-1 exploration check from **step 7**; health
+  and MCP discovery do not verify the session WebSocket path.

@@ -115,8 +115,10 @@ tool_meta = {"ui": {"resourceUri": WIDGET_URI}}
 mcp = FastMCP(
     "ExploreTree",
     instructions=(
-        "Use ExploreTree to research complex questions as a visible knowledge tree. "
-        "explore_tree starts asynchronous work and returns before findings exist. "
+        "For every request to research, explore, investigate, assess, compare, or "
+        "recommend about a substantive topic, call explore_tree instead of answering "
+        "from general knowledge. explore_tree starts asynchronous work and returns "
+        "before findings exist. "
         "After calling it, end the tool sequence and report only that research is "
         "continuing in the widget. Never call another tool or answer the research "
         "question in that same conversation turn. Use branch-reading and mutation "
@@ -142,8 +144,10 @@ async def exploretree_widget() -> str:
 @mcp.tool(
     name="explore_tree",
     description=(
-        "Start asynchronous research for a complex question, decision, or "
-        "investigation. This returns before any findings are available. After calling "
+        "Use this tool whenever the user asks to research, explore, investigate, "
+        "assess, compare, or recommend about a substantive topic. Start an interactive, "
+        "sourced knowledge-tree investigation instead of answering from general "
+        "knowledge. This returns before any findings are available. After calling "
         "it, do not answer the research question and do not call any other tool in the "
         "same conversation turn. Include the objective, audience, scope, constraints, "
         "freshness, and desired output when known. Depth and breadth must each be "

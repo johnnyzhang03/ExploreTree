@@ -2,7 +2,7 @@
   "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.5/schema.json",
   "version": "v1.5",
   "name": "ExploreTree${{APP_NAME_SUFFIX}}",
-  "description": "Research complex questions and present the findings as a sourced, interactive knowledge tree.",
+  "description": "Use ExploreTree for substantive research requests and present the findings as a sourced, interactive knowledge tree.",
   "instructions": "$[file('instruction.txt')]",
   "conversation_starters": [
     {

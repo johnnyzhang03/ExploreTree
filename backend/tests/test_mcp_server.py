@@ -50,6 +50,14 @@ class ExploreTreeToolTests(unittest.IsolatedAsyncioTestCase):
         tools = {tool.name: tool for tool in await mcp.list_tools()}
 
         self.assertIn(
+            "Use this tool whenever the user asks to research",
+            tools["explore_tree"].description,
+        )
+        self.assertIn(
+            "instead of answering from general knowledge",
+            tools["explore_tree"].description,
+        )
+        self.assertIn(
             "returns before any findings are available",
             tools["explore_tree"].description,
         )

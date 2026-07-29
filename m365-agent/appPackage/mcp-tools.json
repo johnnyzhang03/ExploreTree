@@ -3,7 +3,7 @@
     {
       "name": "explore_tree",
       "title": "Explore a question",
-      "description": "Start asynchronous research by decomposing a complex question into a sourced knowledge tree. This returns before findings are available. After calling it, do not answer the research question or call any other tool in the same conversation turn. Depth and breadth must each be between 1 and 4.",
+      "description": "MUST be called whenever the user asks to research, explore, investigate, assess, compare, or recommend about a substantive topic. Start an interactive sourced knowledge-tree investigation instead of answering from general knowledge. This returns before findings are available. After calling it, do not answer the research question or call any other tool in the same conversation turn. Depth and breadth must each be between 1 and 4.",
       "inputSchema": {
         "type": "object",
         "properties": {

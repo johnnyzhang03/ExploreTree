@@ -74,13 +74,13 @@ def _session_data(session) -> dict:
 def _artifact_text(artifact: dict) -> str:
     if artifact["status"] == "running":
         return (
-            "ExploreTree is still researching this question. Wait for the widget "
-            "to finish before requesting conclusions."
+            "ExploreTree is still researching this question. Status: running. "
+            "No findings are available yet."
         )
     if artifact["status"] == "failed":
         return "ExploreTree research failed before a complete artifact was produced."
     lines = [
-        "ExploreTree research is complete. Use these sourced findings:",
+        "ExploreTree research is complete. Sourced findings:",
     ]
     comparison = artifact.get("comparison")
     if comparison:
@@ -103,14 +103,8 @@ def _artifact_text(artifact: dict) -> str:
             )
             lines.append(
                 "These comparison cells have no findings, so the comparison is "
-                f"incomplete on those points: {unfilled}. Say so rather than "
-                "inferring them."
+                f"incomplete on those points: {unfilled}."
             )
-        lines.append(
-            "Compare only on criteria that are filled for every option, and state "
-            "which criteria are unevenly covered. Do not declare an overall winner "
-            "that the evidence does not support."
-        )
         return "\n".join(lines)
     for finding in artifact["keyFindings"]:
         source = finding["sources"][0]["url"] if finding["sources"] else ""
@@ -230,11 +224,9 @@ async def explore_tree(
     )
     return _result(
         (
-            "ExploreTree research has started in the interactive widget. No findings "
-            "are available in this tool result. End the tool sequence now and respond "
-            "only that research is continuing in the widget. Do not answer the research "
-            "question from general knowledge and do not call any other tool in this "
-            "conversation turn."
+            "ExploreTree research has started in the interactive widget. "
+            "Status: running. No findings are available in this result yet; "
+            "they will appear in the widget as the exploration progresses."
         ),
         _session_data(session),
     )
@@ -314,7 +306,7 @@ async def get_tree_outline(session_id: str) -> types.CallToolResult:
         return _error("The exploration session was not found or has expired.")
     outline = session.tree_outline()
     return _result(
-        "Use this compact tree outline to resolve branch names to node IDs.",
+        "Compact tree outline with stable node IDs for this session.",
         outline,
     )
 
@@ -341,7 +333,7 @@ async def get_branch_context(
     except ValueError as exc:
         return _error(str(exc))
     return _result(
-        "Use this branch context to discuss or compare the selected branches.",
+        "Sourced context for the selected branches.",
         context,
     )
 

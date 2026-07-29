@@ -139,7 +139,17 @@ class ComparisonArtifactTextTests(unittest.TestCase):
 
         self.assertIn("Databricks — Cost", text)
         self.assertIn("comparison is incomplete", text)
-        self.assertIn("Say so rather than inferring them", text)
+
+    def test_states_gaps_without_instructing_the_model(self) -> None:
+        # Copilot's prompt-injection classifier blocks the turn when tool output
+        # reads as instructions aimed at the model, so the artifact reports facts
+        # only. The behavioural guidance lives in the agent instructions instead.
+        text = _artifact_text(
+            self._artifact([{"option": "Databricks", "criterion": "Cost"}])
+        )
+
+        for directive in ("Say so rather", "Do not declare", "Compare only on"):
+            self.assertNotIn(directive, text)
 
     def test_running_comparison_withholds_conclusions(self) -> None:
         artifact = self._artifact([])

@@ -79,6 +79,10 @@ class Node:
     depth: int = 0
     verticals: list[str] = field(default_factory=lambda: ["web", "news"])
     card_image: dict | None = None  # one thumbnail for the card cover
+    # Compare-mode alignment coordinates: which option this node evaluates and
+    # which shared criterion it evaluates it against. Empty in explore mode.
+    option: str = ""
+    criterion: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -92,12 +96,18 @@ class Node:
             "depth": self.depth,
             "verticals": self.verticals,
             "cardImage": self.card_image,
+            "option": self.option,
+            "criterion": self.criterion,
         }
 
 
 class Tree:
     def __init__(self) -> None:
         self.nodes: dict[str, Node] = {}
+        # Structural mode this tree was actually grown in, plus the comparison
+        # frame when it is an aligned options x criteria tree.
+        self.mode: str = "explore"
+        self.comparison: dict | None = None
         self._card_image_urls: set[str] = set()
         self._card_image_lock = asyncio.Lock()
 
@@ -109,6 +119,8 @@ class Tree:
         depth: int = 0,
         verticals: list[str] | None = None,
         query: str | None = None,
+        option: str = "",
+        criterion: str = "",
     ) -> Node:
         node = Node(
             id=next_id(),
@@ -118,6 +130,8 @@ class Tree:
             status=status,
             depth=depth,
             verticals=verticals if verticals is not None else ["web", "news"],
+            option=option,
+            criterion=criterion,
         )
         self.nodes[node.id] = node
         return node

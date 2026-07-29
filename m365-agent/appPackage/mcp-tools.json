@@ -3,7 +3,7 @@
     {
       "name": "explore_tree",
       "title": "Explore a question",
-      "description": "MUST be called whenever the user asks to research, explore, investigate, assess, compare, or recommend about a substantive topic. Start an interactive sourced knowledge-tree investigation instead of answering from general knowledge. This returns before findings are available. After calling it, do not answer the research question or call any other tool in the same conversation turn. Depth and breadth must each be between 1 and 4.",
+      "description": "MUST be called whenever the user asks to research, explore, investigate, assess, compare, or recommend about a substantive topic. Start an interactive sourced knowledge-tree investigation instead of answering from general knowledge. This returns before findings are available. After calling it, do not answer the research question or call any other tool in the same conversation turn. Set mode to 'compare' with at least two options when the user is weighing named alternatives; otherwise use 'explore'. Depth and breadth must each be between 1 and 4.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -54,6 +54,23 @@
           "desired_output": {
             "type": "string",
             "description": "How the user intends to apply the research, such as an executive recommendation or comparison."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "explore",
+              "compare"
+            ],
+            "default": "explore",
+            "description": "'explore' maps a topic broadly. 'compare' investigates each option in options against the same shared criteria, producing an aligned side-by-side comparison. Use 'compare' only when at least two distinct alternatives are named."
+          },
+          "options": {
+            "type": "array",
+            "description": "The alternatives to compare, in the user's own words. Required for mode 'compare'; ignored in mode 'explore'.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 4
           }
         },
         "required": [

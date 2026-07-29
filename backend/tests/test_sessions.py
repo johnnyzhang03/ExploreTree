@@ -59,8 +59,12 @@ class ExplorationSessionTests(unittest.IsolatedAsyncioTestCase):
                 "constraints": [],
                 "freshness": "",
                 "desiredOutput": "",
+                "mode": "explore",
+                "options": [],
             },
         )
+        self.assertEqual(session.snapshot()["mode"], "explore")
+        self.assertIsNone(session.snapshot()["comparison"])
 
     async def test_artifact_contains_compact_sourced_findings(self) -> None:
         session = ExplorationSession(id="session", question="question")
@@ -108,6 +112,81 @@ class ExplorationSessionTests(unittest.IsolatedAsyncioTestCase):
             {"oldest": "2026-07-20", "newest": "2026-07-20"},
         )
         self.assertEqual(artifact["treeOutline"][0]["nodeId"], node.id)
+        self.assertIsNone(artifact["comparison"])
+        self.assertEqual(artifact["mode"], "explore")
+
+    async def test_comparison_matrix_reports_filled_and_unfilled_cells(self) -> None:
+        session = ExplorationSession(id="session", question="Which warehouse?")
+        session.tree.mode = "compare"
+        session.tree.comparison = {
+            "options": ["Snowflake", "Databricks"],
+            "criteria": ["Cost", "Scale"],
+        }
+        filled = session.tree.add(
+            label="Cost",
+            parent_id="root",
+            status="done",
+            depth=2,
+            option="Snowflake",
+            criterion="Cost",
+        )
+        filled.insight = "Consumption pricing dominates the bill."
+        filled.sources = [
+            {
+                "title": "Pricing",
+                "url": "https://example.com/pricing",
+                "domain": "example.com",
+                "vertical": "web",
+            }
+        ]
+        # searched but never finished: must count as unfilled, not as a finding
+        pending = session.tree.add(
+            label="Cost",
+            parent_id="root",
+            status="searching",
+            depth=2,
+            option="Databricks",
+            criterion="Cost",
+        )
+        self.assertEqual(pending.status, "searching")
+
+        matrix = session.comparison_matrix()
+
+        self.assertEqual(len(matrix["cells"]), 1)
+        self.assertEqual(matrix["cells"][0]["option"], "Snowflake")
+        self.assertEqual(matrix["cells"][0]["criterion"], "Cost")
+        self.assertEqual(matrix["cells"][0]["evidenceCoverage"]["sourceCount"], 1)
+        self.assertFalse(matrix["complete"])
+        self.assertIn(
+            {"option": "Databricks", "criterion": "Cost"}, matrix["unfilledCells"]
+        )
+        self.assertIn(
+            {"option": "Snowflake", "criterion": "Scale"}, matrix["unfilledCells"]
+        )
+        self.assertEqual(len(matrix["unfilledCells"]), 3)
+
+    async def test_outline_and_branch_context_carry_alignment_coordinates(self) -> None:
+        session = ExplorationSession(id="session", question="Which warehouse?")
+        session.tree.mode = "compare"
+        node = session.tree.add(
+            label="Cost",
+            parent_id=None,
+            status="done",
+            depth=1,
+            option="Snowflake",
+            criterion="Cost",
+        )
+        node.insight = "Consumption pricing dominates the bill."
+
+        outline = session.tree_outline()
+        context = session.branch_context([node.id])
+
+        self.assertEqual(outline["mode"], "compare")
+        self.assertEqual(outline["nodes"][0]["option"], "Snowflake")
+        self.assertEqual(outline["nodes"][0]["criterion"], "Cost")
+        finding = context["branches"][0]["findings"][0]
+        self.assertEqual(finding["option"], "Snowflake")
+        self.assertEqual(finding["criterion"], "Cost")
 
     async def test_tree_outline_contains_branch_metadata(self) -> None:
         session = ExplorationSession(id="session", question="question")

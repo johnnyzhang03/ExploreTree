@@ -390,7 +390,12 @@ function SidePanel({
   return (
     <aside className="panel">
       <div className="panel-head">
-        <span className="panel-title">{capitalize(node.label)}</span>
+        <span className="panel-title">
+          {node.option && node.criterion && (
+            <span className="panel-option">{node.option}</span>
+          )}
+          {capitalize(node.label)}
+        </span>
         <button className="panel-close" onClick={onClose} aria-label="Close">
           ×
         </button>
@@ -587,6 +592,7 @@ export default function App() {
   const [sessionId, setSessionId] = useState(null);
   const [streamUrl, setStreamUrl] = useState(null);
   const [researchBrief, setResearchBrief] = useState({ question });
+  const [comparison, setComparison] = useState(null); // aligned compare-mode frame
   const wsRef = useRef(null);
   const nodesRef = useRef({});
   const briefRef = useRef(researchBrief);
@@ -618,6 +624,7 @@ export default function App() {
       setMedia({});
       setSelectedId(null);
       setPath([]);
+      setComparison(toolData.comparison || null);
     } else {
       nodesRef.current = { ...nodesRef.current, ...incomingNodes };
       setNodes((previous) => ({ ...previous, ...incomingNodes }));
@@ -650,6 +657,12 @@ export default function App() {
         });
       } else if (msg.type === "planning") {
         setStatus("Planning…");
+      } else if (msg.type === "mode") {
+        setComparison(
+          msg.mode === "compare"
+            ? { options: msg.options || [], criteria: msg.criteria || [] }
+            : null
+        );
       } else if (msg.type === "media") {
         setMedia((prev) => ({
           ...prev,
@@ -714,6 +727,7 @@ export default function App() {
     setStarted(true);
     setSelectedId(null);
     setPath([]);
+    setComparison(null);
     setStatus("exploring");
     wsRef.current.send(
       JSON.stringify({ type: "ask", question, depth, breadth })
@@ -877,6 +891,14 @@ export default function App() {
           <button className="fullscreen-toggle" onClick={toggleFullscreen}>
             {isFullscreen ? "Exit full screen" : "Full screen"}
           </button>
+        )}
+        {comparison && (
+          <span
+            className="mode-chip"
+            title={`Comparing ${comparison.options.join(", ")} against ${comparison.criteria.join(", ")}`}
+          >
+            Comparing {comparison.options.length} options
+          </span>
         )}
         <span className="status">{status}</span>
       </div>

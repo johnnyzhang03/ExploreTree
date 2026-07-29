@@ -10,11 +10,12 @@ from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import Field
 
 from .config import settings
-from .research_brief import ResearchBrief
+from .research_brief import ResearchBrief, normalize_mode
 from .sessions import SessionNotFoundError, sessions
 
 WIDGET_URI = "ui://exploretree/main-v2"
 BriefItems = Annotated[list[str], Field(max_length=8)]
+CompareOptions = Annotated[list[str], Field(max_length=4)]
 BranchIds = Annotated[list[str], Field(min_length=1, max_length=2)]
 
 
@@ -81,6 +82,36 @@ def _artifact_text(artifact: dict) -> str:
     lines = [
         "ExploreTree research is complete. Use these sourced findings:",
     ]
+    comparison = artifact.get("comparison")
+    if comparison:
+        lines.append(
+            "This is an aligned comparison of "
+            f"{', '.join(comparison['options'])} against the same criteria: "
+            f"{', '.join(comparison['criteria'])}."
+        )
+        for cell in comparison["cells"]:
+            coverage = cell["evidenceCoverage"]
+            lines.append(
+                f"- [{cell['nodeId']}] {cell['option']} — {cell['criterion']}: "
+                f"{cell['insight']} Evidence coverage: {coverage['sourceCount']} "
+                f"unique sources across {coverage['domainCount']} domains."
+            )
+        if comparison["unfilledCells"]:
+            unfilled = "; ".join(
+                f"{cell['option']} — {cell['criterion']}"
+                for cell in comparison["unfilledCells"]
+            )
+            lines.append(
+                "These comparison cells have no findings, so the comparison is "
+                f"incomplete on those points: {unfilled}. Say so rather than "
+                "inferring them."
+            )
+        lines.append(
+            "Compare only on criteria that are filled for every option, and state "
+            "which criteria are unevenly covered. Do not declare an overall winner "
+            "that the evidence does not support."
+        )
+        return "\n".join(lines)
     for finding in artifact["keyFindings"]:
         source = finding["sources"][0]["url"] if finding["sources"] else ""
         suffix = f" Source: {source}" if source else ""
@@ -150,8 +181,12 @@ async def exploretree_widget() -> str:
         "knowledge. This returns before any findings are available. After calling "
         "it, do not answer the research question and do not call any other tool in the "
         "same conversation turn. Include the objective, audience, scope, constraints, "
-        "freshness, and desired output when known. Depth and breadth must each be "
-        "between 1 and 4."
+        "freshness, and desired output when known. Set mode to 'compare' when the "
+        "user is weighing specific alternatives against each other, and pass those "
+        "alternatives in options; otherwise use 'explore'. A request for a "
+        "recommendation between named alternatives is a comparison: use mode "
+        "'compare' and put the decision in objective. Depth and breadth must "
+        "each be between 1 and 4."
     ),
     meta=tool_meta,
 )
@@ -165,9 +200,13 @@ async def explore_tree(
     constraints: BriefItems | None = None,
     freshness: str = "",
     desired_output: str = "",
+    mode: str = "explore",
+    options: CompareOptions | None = None,
 ) -> types.CallToolResult:
     if len(scope or []) > 8 or len(constraints or []) > 8:
         return _error("Scope and constraints can each contain at most 8 items.")
+    if mode and normalize_mode(mode) != mode.strip().casefold():
+        return _error("Mode must be either 'explore' or 'compare'.")
     brief = ResearchBrief.create(
         question,
         objective=objective,
@@ -176,6 +215,8 @@ async def explore_tree(
         constraints=constraints,
         freshness=freshness,
         desired_output=desired_output,
+        mode=mode,
+        options=options,
     )
     if not brief.question:
         return _error("Question must not be empty.")

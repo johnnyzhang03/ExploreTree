@@ -92,6 +92,8 @@ class ExplorationSession:
             "question": self.question,
             "brief": brief.to_dict(),
             "status": self.status,
+            "mode": self.tree.mode,
+            "comparison": self.tree.comparison,
             "nodes": [node.to_dict() for node in self.tree.nodes.values()],
         }
 
@@ -132,11 +134,18 @@ class ExplorationSession:
                 "evidenceCount": coverage["sourceCount"],
                 "evidenceCoverage": coverage,
                 "insight": _compact_text(node.insight, 180),
+                **(
+                    {"option": node.option, "criterion": node.criterion}
+                    if node.option or node.criterion
+                    else {}
+                ),
             })
         return {
             "type": "exploretree.tree-outline",
             "sessionId": self.id,
             "status": self.status,
+            "mode": self.tree.mode,
+            "comparison": self.tree.comparison,
             "nodes": nodes,
             "truncated": len(ordered) > limit,
         }
@@ -177,6 +186,11 @@ class ExplorationSession:
                         "insight": _compact_text(node.insight),
                         "evidenceCount": coverage["sourceCount"],
                         "evidenceCoverage": coverage,
+                        **(
+                            {"option": node.option, "criterion": node.criterion}
+                            if node.option or node.criterion
+                            else {}
+                        ),
                         "sources": [
                             {
                                 "title": source.get("title") or source.get("url"),
@@ -203,7 +217,56 @@ class ExplorationSession:
             "type": "exploretree.branch-context",
             "sessionId": self.id,
             "status": self.status,
+            "mode": self.tree.mode,
             "branches": branches,
+        }
+
+    def comparison_matrix(self) -> dict | None:
+        """The aligned options x criteria grid, with unfilled cells named explicitly.
+
+        Only the primary criteria grid is reported; deeper sub-criteria stay in the
+        tree outline so the matrix remains compact and genuinely comparable.
+        """
+        frame = self.tree.comparison
+        if not frame:
+            return None
+
+        options = frame.get("options", [])
+        criteria = frame.get("criteria", [])
+        by_cell = {}
+        for node in self.tree.nodes.values():
+            # The primary grid is exactly depth 2: options sit at depth 1 and
+            # deeper sub-criteria must not displace a real cell.
+            if node.depth != 2 or not node.option or not node.criterion:
+                continue
+            key = (node.option, node.criterion)
+            if key in by_cell or node.criterion not in criteria:
+                continue
+            by_cell[key] = node
+
+        cells = []
+        missing = []
+        for option in options:
+            for criterion in criteria:
+                node = by_cell.get((option, criterion))
+                if node is None or node.status != "done" or not node.insight:
+                    missing.append({"option": option, "criterion": criterion})
+                    continue
+                cells.append(
+                    {
+                        "option": option,
+                        "criterion": criterion,
+                        "nodeId": node.id,
+                        "insight": _compact_text(node.insight),
+                        "evidenceCoverage": evidence_coverage(node.sources),
+                    }
+                )
+        return {
+            "options": options,
+            "criteria": criteria,
+            "cells": cells,
+            "unfilledCells": missing,
+            "complete": not missing,
         }
 
     def artifact(self, limit: int = 8) -> dict:
@@ -245,10 +308,12 @@ class ExplorationSession:
             for source in node.sources
         ]
         aggregate_coverage = evidence_coverage(all_sources)
+        matrix = self.comparison_matrix()
         return {
             "type": "exploretree.research-artifact",
             "sessionId": self.id,
             "status": self.status,
+            "mode": self.tree.mode,
             "brief": brief.to_dict(),
             "coverage": {
                 "completedNodes": len(completed),
@@ -270,6 +335,7 @@ class ExplorationSession:
                 ),
             },
             "keyFindings": findings,
+            "comparison": matrix,
             "treeOutline": self.tree_outline()["nodes"],
         }
 

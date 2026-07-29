@@ -47,6 +47,8 @@ Allow natural-language conversation to control and discuss the visual tree.
   for expansion, follow-ups, and explicit "Discuss in Copilot" selection.**
 
 Branch ranking and decision relevance remain dependent on priorities 3 and 4.
+Compare mode (priority 4) now supplies aligned option and criterion coordinates
+for branch comparison.
 
 ### 3. Research quality signals
 
@@ -71,35 +73,58 @@ source counts.
 
 ### 4. Decision-oriented research modes
 
-Adapt the research process to what the user intends to accomplish.
+Adapt the research process to what the user intends to accomplish. Two modes
+ship: **Explore** and **Compare**. A mode must change how research is *run*, not
+just how it is worded.
 
 #### Explore
 
 Build a broad map of a topic, its major dimensions, and open questions.
+Gap-driven growth: reflection expands whichever leaves leave the biggest
+information gaps. **Implemented** — this is the default mode.
 
 #### Compare
 
 Use aligned branches and consistent criteria to compare options, markets, or
-strategies.
+strategies. **Implemented.**
 
-#### Recommend
+- Level 1 is the options; every level below applies the same criteria to every
+  option, in the same order, so the branches stay aligned.
+- Reflection selects *criteria*, not individual nodes — deepening a single node
+  would destroy the alignment. A chosen criterion is refined into sub-criteria
+  once and applied across all options.
+- Copilot infers the mode and passes the options; the user can override it.
+- The artifact carries an option-by-criterion matrix and names the cells that
+  were never filled, so an incomplete comparison reads as incomplete.
+- If no two distinct options can be resolved, the run degrades to Explore rather
+  than presenting a comparison that isn't one.
+- Automatic growth stays symmetric; an explicit user expansion or follow-up is
+  allowed to break symmetry.
 
-Produce decision-ready evidence separated into:
+#### Recommend — deferred, gated on priority 3
 
-- Findings
-- Tradeoffs
-- Assumptions
-- Risks and uncertainties
-- Evidence gaps
-- Final qualified recommendation
+Decision-ready output separated into findings, tradeoffs, assumptions, risks,
+evidence gaps, and a final qualified recommendation.
 
-Copilot should infer the mode from the conversation while allowing the user to
-override it. The selected mode should influence planning, tree structure,
-reflection priorities, stopping criteria, and the final research artifact.
+This is **not** implemented, and deliberately so. Tradeoffs, assumptions, and
+risk sections require claim-to-source attribution, which priority 3 explicitly
+defers. Built on today's aggregate evidence coverage, those sections would be
+LLM-asserted while presenting as decision-grade — a worse failure than not
+shipping them.
+
+A thin Recommend mode was also rejected: it would have changed only artifact
+wording, making it an output preference wearing a mode's clothes, while a third
+enum value would degrade Copilot's mode inference. Recommendation *intent*
+already reaches the planner through the existing `objective` and
+`desired_output` brief fields, so nothing is lost by waiting.
+
+Recommend earns a mode once claim-level attribution exists, because it will then
+genuinely change stopping criteria — stop when the decision is supported, rather
+than when the map is covered — and artifact structure.
 
 ## Suggested sequence
 
 1. Clear completion experience.
 2. Copilot-to-tree branch interaction.
 3. Research quality signals.
-4. Explore, Compare, and Recommend modes.
+4. Explore and Compare modes. **Implemented.** Recommend follows priority 3.

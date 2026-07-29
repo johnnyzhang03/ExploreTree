@@ -68,6 +68,9 @@ function Card({ node, childCount, childrenGrowing, onOpen, onDrill }) {
         </div>
       )}
       <div className="card-body">
+        {node.option && node.criterion && (
+          <div className="card-option">{node.option}</div>
+        )}
         <div className="card-title">{capitalize(node.label)}</div>
         <p className="card-insight">
           {node.status === "done"

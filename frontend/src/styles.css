@@ -242,6 +242,16 @@ body {
   box-shadow: 0 1px 4px rgba(32, 33, 36, 0.1);
 }
 
+.mode-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e8f0fe;
+  color: #1558d6;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .status {
   font-size: 14px;
   color: #5f6368;
@@ -285,6 +295,16 @@ body {
   color: #202124;
   line-height: 1.35;
   flex: 1;
+}
+
+.panel-option {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #1a73e8;
+  margin-bottom: 3px;
 }
 
 .panel-close {
@@ -713,6 +733,15 @@ body {
   letter-spacing: -0.2px;
 }
 
+/* Compare mode: the option a card evaluates, above its criterion label. */
+.node-option {
+  fill: #1a73e8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
 .node-insight {
   fill: #5f6368;
   font-size: 14px;
@@ -900,6 +929,14 @@ body {
   display: flex;
   flex-direction: column;
   padding: 16px 18px 18px;
+}
+.card-option {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #1a73e8;
+  margin-bottom: 4px;
 }
 .card-title {
   font-size: 16px;

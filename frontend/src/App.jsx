@@ -406,42 +406,27 @@ function SidePanel({
         </p>
 
         {coverage && node.parentId && node.status === "done" && (
-          <>
-            <div className="panel-section-label">Evidence coverage</div>
-            <div className="panel-coverage">
-              <div className="coverage-metric">
-                <strong>{coverage.sourceCount}</strong>
-                <span>unique sources</span>
-              </div>
-              <div className="coverage-metric">
-                <strong>{coverage.domainCount}</strong>
-                <span>domains</span>
-              </div>
-              <div className="coverage-metric">
-                <strong>{coverage.verticalCount}</strong>
-                <span>verticals</span>
-              </div>
-              <div className="coverage-metric">
-                <strong>{coverage.datedSourceCount}</strong>
-                <span>dated sources</span>
-              </div>
-            </div>
-            {coverage.dateRange && (
-              <p className="coverage-date-range">
-                Published {coverage.dateRange.oldest}
-                {coverage.dateRange.newest !== coverage.dateRange.oldest &&
-                  ` to ${coverage.dateRange.newest}`}
-              </p>
-            )}
+          <div
+            className="panel-evidence-summary"
+            title="Includes web, news, finance, places, and video evidence."
+          >
             {coverage.gaps?.noEvidence && (
-              <p className="coverage-gap">No supporting search evidence was found.</p>
+              <span className="coverage-gap">
+                No supporting search evidence was found.
+              </span>
             )}
-            {!coverage.gaps?.noEvidence && coverage.gaps?.singleDomain && (
-              <p className="coverage-gap">
-                Evidence comes from a single domain.
-              </p>
+            {!coverage.gaps?.noEvidence && (
+              <span>
+                {coverage.sourceCount} source
+                {coverage.sourceCount === 1 ? "" : "s"} from{" "}
+                {coverage.domainCount} domain
+                {coverage.domainCount === 1 ? "" : "s"}
+                {coverage.gaps?.singleDomain && (
+                  <span className="coverage-caution"> · limited diversity</span>
+                )}
+              </span>
             )}
-          </>
+          </div>
         )}
 
         {showDiscuss && (
@@ -471,9 +456,7 @@ function SidePanel({
           </>
         )}
 
-        <div className="panel-section-label">
-          Sources {sources.length ? `(${sources.length})` : ""}
-        </div>
+        <div className="panel-section-label">Sources</div>
         {sources.length ? (
           <ul className="panel-sources">
             {sources.map((s, i) => (

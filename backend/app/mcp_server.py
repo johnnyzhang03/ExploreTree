@@ -116,9 +116,11 @@ mcp = FastMCP(
     "ExploreTree",
     instructions=(
         "Use ExploreTree to research complex questions as a visible knowledge tree. "
-        "Start with explore_tree. Use get_tree_outline and get_branch_context to "
-        "understand existing branches, then expand_node or add_followup to investigate "
-        "them further."
+        "explore_tree starts asynchronous work and returns before findings exist. "
+        "After calling it, end the tool sequence and report only that research is "
+        "continuing in the widget. Never call another tool or answer the research "
+        "question in that same conversation turn. Use branch-reading and mutation "
+        "tools only in response to a later user message."
     ),
     host="0.0.0.0",
     transport_security=TransportSecuritySettings(
@@ -140,8 +142,10 @@ async def exploretree_widget() -> str:
 @mcp.tool(
     name="explore_tree",
     description=(
-        "Build a sourced, interactive evidence map for a complex question, decision, "
-        "or investigation. Include the objective, audience, scope, constraints, "
+        "Start asynchronous research for a complex question, decision, or "
+        "investigation. This returns before any findings are available. After calling "
+        "it, do not answer the research question and do not call any other tool in the "
+        "same conversation turn. Include the objective, audience, scope, constraints, "
         "freshness, and desired output when known. Depth and breadth must each be "
         "between 1 and 4."
     ),
@@ -181,10 +185,11 @@ async def explore_tree(
     )
     return _result(
         (
-            f"ExploreTree is researching this question in the interactive widget: "
-            f"{brief.question}. Findings are still streaming, so do not answer from general "
-            "knowledge or claim that research is complete. End this tool sequence now; "
-            "do not call get_research_results in the same conversation turn."
+            "ExploreTree research has started in the interactive widget. No findings "
+            "are available in this tool result. End the tool sequence now and respond "
+            "only that research is continuing in the widget. Do not answer the research "
+            "question from general knowledge and do not call any other tool in this "
+            "conversation turn."
         ),
         _session_data(session),
     )
@@ -252,7 +257,8 @@ async def get_research_results(session_id: str) -> types.CallToolResult:
     name="get_tree_outline",
     description=(
         "Retrieve compact semantic metadata and stable node IDs for an existing "
-        "ExploreTree session. Use this to resolve a branch mentioned by the user "
+        "ExploreTree session on a later user turn. Never call in the same conversation "
+        "turn as explore_tree. Use this to resolve a branch mentioned by the user "
         "before expanding it, adding a follow-up, or requesting branch context."
     ),
 )
@@ -272,7 +278,8 @@ async def get_tree_outline(session_id: str) -> types.CallToolResult:
     name="get_branch_context",
     description=(
         "Retrieve compact sourced context for one or two branches in an existing "
-        "ExploreTree session. Use two node IDs when the user asks to compare branches."
+        "ExploreTree session on a later user turn. Never call in the same conversation "
+        "turn as explore_tree. Use two node IDs when the user asks to compare branches."
     ),
 )
 async def get_branch_context(

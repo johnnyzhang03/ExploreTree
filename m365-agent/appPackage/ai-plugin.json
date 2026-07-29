@@ -8,7 +8,7 @@
   "functions": [
     {
       "name": "explore_tree",
-      "description": "Build a sourced, interactive evidence map for a complex question, decision, or investigation. Include the user's objective, audience, required scope, constraints, freshness needs, and desired outcome when known."
+      "description": "Start asynchronous research for a complex question, decision, or investigation. This returns before findings are available. After calling it, do not answer the research question or call any other tool in the same conversation turn."
     },
     {
       "name": "expand_node",
@@ -24,11 +24,11 @@
     },
     {
       "name": "get_tree_outline",
-      "description": "Retrieve compact semantic metadata and stable node IDs for an existing ExploreTree session."
+      "description": "Retrieve compact semantic metadata and stable node IDs on a later user turn. Never call this in the same conversation turn as explore_tree."
     },
     {
       "name": "get_branch_context",
-      "description": "Retrieve compact sourced context for one or two branches in an existing ExploreTree session."
+      "description": "Retrieve compact sourced context for one or two branches on a later user turn. Never call this in the same conversation turn as explore_tree."
     },
     {
       "name": "get_node_media",

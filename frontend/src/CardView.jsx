@@ -9,16 +9,12 @@ function CoverageLine({ coverage }) {
     return <div className="card-coverage card-coverage--gap">Evidence gap</div>;
   }
   return (
-    <div className="card-coverage">
-      {coverage.sourceCount} source{coverage.sourceCount === 1 ? "" : "s"}
-      <span>·</span>
+    <div
+      className="card-coverage"
+      title="Includes web, news, finance, places, and video evidence."
+    >
+      {coverage.sourceCount} source{coverage.sourceCount === 1 ? "" : "s"} from{" "}
       {coverage.domainCount} domain{coverage.domainCount === 1 ? "" : "s"}
-      {coverage.datedSourceCount > 0 && (
-        <>
-          <span>·</span>
-          {coverage.datedSourceCount} dated
-        </>
-      )}
     </div>
   );
 }

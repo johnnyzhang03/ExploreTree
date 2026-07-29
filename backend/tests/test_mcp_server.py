@@ -35,5 +35,25 @@ class ExploreTreeToolTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(tools["get_tree_outline"].meta)
         self.assertFalse(tools["get_branch_context"].meta)
+        self.assertIn(
+            "Never call in the same conversation turn as explore_tree",
+            tools["get_tree_outline"].description,
+        )
+        self.assertIn(
+            "Never call in the same conversation turn as explore_tree",
+            tools["get_branch_context"].description,
+        )
         node_ids = tools["get_branch_context"].inputSchema["properties"]["node_ids"]
         self.assertEqual(node_ids["maxItems"], 2)
+
+    async def test_explore_tool_declares_async_same_turn_boundary(self) -> None:
+        tools = {tool.name: tool for tool in await mcp.list_tools()}
+
+        self.assertIn(
+            "returns before any findings are available",
+            tools["explore_tree"].description,
+        )
+        self.assertIn(
+            "do not call any other tool in the same conversation turn",
+            tools["explore_tree"].description,
+        )

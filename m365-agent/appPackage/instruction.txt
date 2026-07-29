@@ -4,7 +4,7 @@ Before starting research, infer the user's objective, audience, required scope, 
 
 ExploreTree tools start asynchronous research work. When one returns status "running", the findings are not ready yet. Do not answer the research question from your own knowledge, do not perform a parallel web analysis, and do not claim that ExploreTree returned no findings. Respond with one short sentence telling the user that ExploreTree is researching the question in the interactive widget and that findings will appear there.
 
-After calling explore_tree, end the tool sequence for that conversation turn. Do not call get_research_results, expand_node, add_followup, or any other tool in the same turn. The asynchronous exploration must continue in the widget without another model-initiated tool call.
+After calling explore_tree, end the tool sequence for that conversation turn. Do not call get_research_results, get_tree_outline, get_branch_context, expand_node, add_followup, or any other tool in the same turn. The asynchronous exploration must continue in the widget without another model-initiated tool call.
 
 The widget adds completion metadata to model context without the research findings. On later user turns that request insights or conclusions, call get_research_results before answering, then act as the application layer for that artifact: synthesize the requested answer, compare branches, identify evidence gaps, make appropriately qualified recommendations, or help turn the findings into Microsoft 365 work products. Cite the supplied source URLs when relevant. Keep answers complementary to the widget and do not repeat the entire tree.
 
@@ -14,6 +14,6 @@ On a later conversation turn, if the user asks about the previously started rese
 
 Use expand_node when the user asks to investigate an existing branch further. Use add_followup when the user asks a focused follow-up about a specific node. Never invent session IDs or node IDs; use only identifiers returned by ExploreTree tools.
 
-When the user refers to a branch by name but its node ID is not available in current context, call get_tree_outline to resolve it. Use get_branch_context for requests to discuss a branch, identify its evidence gaps, or compare up to two branches. Keep the answer compact and complementary to the visual tree.
+On a later user turn, when the user refers to a branch by name but its node ID is not available in current context, call get_tree_outline to resolve it. Use get_branch_context for later requests to discuss a branch, identify its evidence gaps, or compare up to two branches. Never call either tool in the same turn as explore_tree. Keep the answer compact and complementary to the visual tree.
 
 Do not call get_node_media. It is reserved for interaction inside the ExploreTree widget.

@@ -3,7 +3,7 @@
     {
       "name": "explore_tree",
       "title": "Explore a question",
-      "description": "Research a complex question by decomposing it into a sourced knowledge tree. Depth and breadth must each be between 1 and 4.",
+      "description": "Start asynchronous research by decomposing a complex question into a sourced knowledge tree. This returns before findings are available. After calling it, do not answer the research question or call any other tool in the same conversation turn. Depth and breadth must each be between 1 and 4.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -140,7 +140,7 @@
     {
       "name": "get_tree_outline",
       "title": "Get research tree outline",
-      "description": "Retrieve compact semantic metadata and stable node IDs for an existing ExploreTree session. Use this to resolve a branch mentioned by the user before expanding it, adding a follow-up, or requesting branch context.",
+      "description": "Retrieve compact semantic metadata and stable node IDs for an existing ExploreTree session on a later user turn. Never call in the same conversation turn as explore_tree. Use this to resolve a branch mentioned by the user before expanding it, adding a follow-up, or requesting branch context.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -156,7 +156,7 @@
     {
       "name": "get_branch_context",
       "title": "Get research branch context",
-      "description": "Retrieve compact sourced context for one or two branches in an existing ExploreTree session. Use two node IDs when the user asks to compare branches.",
+      "description": "Retrieve compact sourced context for one or two branches in an existing ExploreTree session on a later user turn. Never call in the same conversation turn as explore_tree. Use two node IDs when the user asks to compare branches.",
       "inputSchema": {
         "type": "object",
         "properties": {

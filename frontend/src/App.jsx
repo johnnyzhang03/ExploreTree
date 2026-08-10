@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Tree from "./Tree.jsx";
 import CardView from "./CardView.jsx";
+import InlineResearchWidget from "./InlineResearchWidget.jsx";
 import { useMcpBridge } from "./McpBridge.jsx";
 
 // Same-origin in production (FastAPI serves this build); falls back to the
@@ -570,6 +571,7 @@ export default function App() {
     toolData,
     isConnected: mcpConnected,
     isFullscreen,
+    containerHeight,
     canFullscreen,
     callTool,
     openExternal,
@@ -825,8 +827,19 @@ export default function App() {
 
   if (embedded && !started) {
     return (
-      <div className="app mcp-loading">
-        {mcpConnected ? "Preparing ExploreTree…" : "Connecting to Microsoft 365 Copilot…"}
+      <div className="app mcp-inline">
+        <InlineResearchWidget
+          question=""
+          nodes={{}}
+          status={
+            mcpConnected
+              ? "Planning…"
+              : "Connecting to Microsoft 365 Copilot…"
+          }
+          comparison={null}
+          canExpand={false}
+          onExpand={toggleFullscreen}
+        />
       </div>
     );
   }
@@ -857,8 +870,33 @@ export default function App() {
     );
   }
 
+  if (embedded && !isFullscreen) {
+    return (
+      <div className="app mcp-inline">
+        <InlineResearchWidget
+          question={researchBrief.question || question}
+          nodes={nodes}
+          status={status}
+          comparison={comparison}
+          canExpand={canFullscreen}
+          onExpand={toggleFullscreen}
+        />
+      </div>
+    );
+  }
+
+  const expandedHeight =
+    containerHeight && containerHeight >= 720 ? containerHeight : 1200;
+
   return (
-    <div className={`app ${embedded ? "mcp-app" : ""} ${isFullscreen ? "fullscreen" : ""}`}>
+    <div
+      className={`app ${embedded ? "mcp-app" : ""} ${isFullscreen ? "fullscreen" : ""}`}
+      style={
+        embedded && isFullscreen
+          ? { "--mcp-expanded-height": `${expandedHeight}px` }
+          : undefined
+      }
+    >
       <div className="topbar">
         <span className="brand-sm">
           <span className="brand-explore">Explore</span>
@@ -886,11 +924,6 @@ export default function App() {
             Map
           </button>
         </div>
-        {embedded && canFullscreen && (
-          <button className="fullscreen-toggle" onClick={toggleFullscreen}>
-            {isFullscreen ? "Exit full screen" : "Full screen"}
-          </button>
-        )}
         {comparison && (
           <span
             className="mode-chip"

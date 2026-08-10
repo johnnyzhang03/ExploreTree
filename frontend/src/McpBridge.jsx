@@ -14,6 +14,7 @@ export function McpBridgeProvider({ children }) {
   const [toolData, setToolData] = useState(null);
   const [theme, setTheme] = useState("light");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [containerHeight, setContainerHeight] = useState(null);
 
   const { app, isConnected } = useApp({
     appInfo: { name: "ExploreTree", version: "1.0.0" },
@@ -29,6 +30,12 @@ export function McpBridgeProvider({ children }) {
         if (context?.displayMode) {
           setIsFullscreen(context.displayMode === "fullscreen");
         }
+        const height =
+          context?.containerDimensions?.maxHeight ??
+          context?.containerDimensions?.height;
+        if (Number.isFinite(height) && height > 0) {
+          setContainerHeight(height);
+        }
       };
     },
   });
@@ -39,6 +46,12 @@ export function McpBridgeProvider({ children }) {
     if (context?.theme) setTheme(context.theme === "dark" ? "dark" : "light");
     if (context?.displayMode) {
       setIsFullscreen(context.displayMode === "fullscreen");
+    }
+    const height =
+      context?.containerDimensions?.maxHeight ??
+      context?.containerDimensions?.height;
+    if (Number.isFinite(height) && height > 0) {
+      setContainerHeight(height);
     }
   }, [app, isConnected]);
 
@@ -145,6 +158,7 @@ export function McpBridgeProvider({ children }) {
         toolData,
         isConnected,
         isFullscreen,
+        containerHeight,
         canFullscreen,
         callTool,
         openExternal,

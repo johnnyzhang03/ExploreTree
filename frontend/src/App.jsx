@@ -69,9 +69,8 @@ function completionArtifactFor(sessionId, brief, nodes) {
 function modelContextFor(artifact) {
   return [
     "ExploreTree has completed, but this context intentionally contains coverage metadata only and no research findings.",
-    "For the current 'Exploration complete.' turn, report only the four coverage counts: completed findings, unique sources, top-level branches, and evidence gaps. Then say the user can ask for insights.",
-    "Do not infer, summarize, or discuss any findings from prior knowledge or conversation context.",
-    `On a later turn requesting insights, call get_research_results with session ID ${artifact.sessionId} before answering.`,
+    "Do not generate an unsolicited response. Wait for the user's next message.",
+    `When the user later requests insights, call get_research_results with session ID ${artifact.sessionId} before answering.`,
     JSON.stringify(artifact),
   ].join("\n");
 }
@@ -308,7 +307,9 @@ function FinanceCard({ data, openExternal }) {
           </div>
         )}
         {hasHistory && (
-          <Sparkline data={data.priceHistory} width={100} height={28} color={changeColor} />
+          <span title={data.priceHistoryLabel || "Price history"}>
+            <Sparkline data={data.priceHistory} width={100} height={28} color={changeColor} />
+          </span>
         )}
       </div>
       <div className="finance-metrics">
@@ -699,14 +700,12 @@ export default function App() {
             briefRef.current,
             nodesRef.current
           );
-          updateModelContext(modelContextFor(artifact), artifact)
-            .then(() => sendMessage("Exploration complete."))
-            .catch((error) => {
+          updateModelContext(modelContextFor(artifact), artifact).catch((error) => {
               completionAnnouncementsRef.current.delete(completedSessionId);
               if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: "release_completion_handoff" }));
               }
-              console.warn("Failed to notify Copilot of completion", error);
+              console.warn("Failed to update Copilot research context", error);
             });
         }
       } else if (msg.type === "error") {
@@ -714,7 +713,7 @@ export default function App() {
       }
     };
     return () => ws.close();
-  }, [embedded, sendMessage, streamUrl, updateModelContext]);
+  }, [embedded, streamUrl, updateModelContext]);
 
   const ask = () => {
     if (embedded) return;

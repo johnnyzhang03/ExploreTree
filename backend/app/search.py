@@ -204,7 +204,7 @@ def _parse_finance(item: dict) -> tuple[str, dict | None]:
     so the frontend can render them in the finance section rather than generic sources.
     """
     parts = list(item.get("snippets") or [])
-    ctx = item.get("context") or {}
+    ctx = item.get("context") or item.get("data") or {}
     inst = ctx.get("instrument") or {}
 
     title = item.get("title", "")
@@ -229,8 +229,14 @@ def _parse_finance(item: dict) -> tuple[str, dict | None]:
         if price is not None:
             finance_data["price"] = price
 
-        change = inst.get("changeAmount") or pricing.get("priceChange")
-        change_pct = inst.get("changePercentage") or pricing.get("priceChangePercent")
+        change = inst.get("changeAmount")
+        if change is None:
+            change = pricing.get("priceChange")
+        change_pct = inst.get("changePercentage")
+        if change_pct is None:
+            change_pct = inst.get("changePercent")
+        if change_pct is None:
+            change_pct = pricing.get("priceChangePercent")
         if change is not None:
             finance_data["change"] = change
         if change_pct is not None:
@@ -258,12 +264,38 @@ def _parse_finance(item: dict) -> tuple[str, dict | None]:
         if lo:
             finance_data["low52w"] = lo
 
-        chart = ctx.get("chart") or {}
+        chart = ctx.get("chart") or inst.get("chart") or {}
         series = chart.get("series") or []
         if series:
-            finance_data["priceHistory"] = [
-                pt.get("price") for pt in series if pt and pt.get("price") is not None
-            ]
+            history = []
+            for point in series:
+                if isinstance(point, (int, float)):
+                    history.append(point)
+                    continue
+                if not isinstance(point, dict):
+                    continue
+                value = next(
+                    (
+                        point[key]
+                        for key in ("price", "close", "value", "y")
+                        if point.get(key) is not None
+                    ),
+                    None,
+                )
+                if value is not None:
+                    history.append(value)
+            if len(history) >= 2:
+                finance_data["priceHistory"] = history
+                finance_data["priceHistoryLabel"] = "Price history"
+
+        previous_close = inst.get("pricePreviousClose")
+        if (
+            "priceHistory" not in finance_data
+            and previous_close is not None
+            and price is not None
+        ):
+            finance_data["priceHistory"] = [previous_close, price]
+            finance_data["priceHistoryLabel"] = "Previous close to current price"
 
         bits = []
         if price is not None:

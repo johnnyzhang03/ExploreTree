@@ -71,6 +71,14 @@ def _session_data(session) -> dict:
     }
 
 
+def _initial_session_data(session) -> dict:
+    data = _session_data(session)
+    data["status"] = "running"
+    data["nodes"] = []
+    data["comparison"] = None
+    return data
+
+
 def _artifact_text(artifact: dict) -> str:
     if artifact["status"] == "running":
         return (
@@ -140,10 +148,14 @@ tool_meta = {"ui": {"resourceUri": WIDGET_URI}}
 mcp = FastMCP(
     "ExploreTree",
     instructions=(
-        "For every request to research, explore, investigate, assess, compare, or "
-        "recommend about a substantive topic, call explore_tree instead of answering "
-        "from general knowledge. explore_tree starts asynchronous work and returns "
-        "before findings exist. "
+        "For every new valid question or information-seeking request, call "
+        "explore_tree instead of answering from general knowledge. Treat explicit "
+        "questions, imperative requests, and understandable topic prompts as valid, "
+        "even when they are simple, broad, casual, or underspecified. Do not ask for "
+        "clarification before calling when there is enough topic to begin. If a "
+        "message has no discernible question, topic, or requested outcome, do not "
+        "invent one; guide the user with one concise prompt to ask a valid question. "
+        "explore_tree starts asynchronous work and returns before findings exist. "
         "After calling it, end the tool sequence and report only that research is "
         "continuing in the widget. Never call another tool or answer the research "
         "question in that same conversation turn. Use branch-reading and mutation "
@@ -169,17 +181,20 @@ async def exploretree_widget() -> str:
 @mcp.tool(
     name="explore_tree",
     description=(
-        "Use this tool whenever the user asks to research, explore, investigate, "
-        "assess, compare, or recommend about a substantive topic. Start an interactive, "
-        "sourced knowledge-tree investigation instead of answering from general "
-        "knowledge. This returns before any findings are available. After calling "
-        "it, do not answer the research question and do not call any other tool in the "
-        "same conversation turn. Include the objective, audience, scope, constraints, "
-        "freshness, and desired output when known. Set mode to 'compare' when the "
-        "user is weighing specific alternatives against each other, and pass those "
-        "alternatives in options; otherwise use 'explore'. A request for a "
-        "recommendation between named alternatives is a comparison: use mode "
-        "'compare' and put the decision in objective. Depth and breadth must "
+        "MUST be called for every new valid user question or information-seeking "
+        "request, including explicit questions, imperative requests, and short topic "
+        "prompts. Use it even when the question is simple, casual, broad, "
+        "underspecified, or does not use a research verb. If there is enough topic "
+        "to begin, infer missing details instead of asking a clarifying question. "
+        "Start an interactive, sourced knowledge-tree investigation instead of "
+        "answering from general knowledge. This returns before any findings are "
+        "available. After calling it, do not answer the research question and do not "
+        "call any other tool in the same conversation turn. Include the objective, "
+        "audience, scope, constraints, freshness, and desired output when known. Set "
+        "mode to 'compare' when the user is weighing specific alternatives against "
+        "each other, and pass those alternatives in options; otherwise use 'explore'. "
+        "A request for a recommendation between named alternatives is a comparison: "
+        "use mode 'compare' and put the decision in objective. Depth and breadth must "
         "each be between 1 and 4."
     ),
     meta=tool_meta,
@@ -228,7 +243,7 @@ async def explore_tree(
             "Status: running. No findings are available in this result yet; "
             "they will appear in the widget as the exploration progresses."
         ),
-        _session_data(session),
+        _initial_session_data(session),
     )
 
 

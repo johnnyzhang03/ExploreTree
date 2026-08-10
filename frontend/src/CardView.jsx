@@ -48,7 +48,7 @@ function Card({ node, childCount, childrenGrowing, onOpen, onDrill }) {
   const imgLoading = ci === undefined || ci === null;
   const img = ci && ci.thumbnail ? ci.thumbnail : null;
   const verticals = nodeVerticals(node);
-  const accent = VERTICALS[verticals[0]]?.color || "#1a73e8";
+  const accent = VERTICALS[verticals[0]]?.color || "#0f6cbd";
   const isLeaf = childCount === 0;
   const drillLabel = isLeaf ? "Expand" : `Open ${childCount} sub-topic${childCount > 1 ? "s" : ""}`;
   // can't drill while a leaf is still searching, or while its children are growing
@@ -100,6 +100,7 @@ function Card({ node, childCount, childrenGrowing, onOpen, onDrill }) {
           </div>
         ) : (
           <button
+            type="button"
             className="card-drill"
             disabled={!drillable}
             onClick={(e) => {

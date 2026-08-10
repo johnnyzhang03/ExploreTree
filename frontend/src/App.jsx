@@ -158,10 +158,11 @@ function vibeOf(depth, breadth) {
 function ScopeControls({ depth, breadth, setDepth, setBreadth }) {
   const vibe = vibeOf(depth, breadth);
   return (
-    <div className="scope">
+    <div className="scope" aria-label="Research scope">
       <div className="scope-row">
-        <label>Depth</label>
+        <label htmlFor="research-depth">Depth</label>
         <input
+          id="research-depth"
           type="range"
           min="1"
           max="4"
@@ -171,8 +172,9 @@ function ScopeControls({ depth, breadth, setDepth, setBreadth }) {
         <span className="scope-val">{depth}</span>
       </div>
       <div className="scope-row">
-        <label>Breadth</label>
+        <label htmlFor="research-breadth">Breadth</label>
         <input
+          id="research-breadth"
           type="range"
           min="1"
           max="4"
@@ -188,7 +190,7 @@ function ScopeControls({ depth, breadth, setDepth, setBreadth }) {
 
 function SearchBar({ autoFocus, question, setQuestion, ask, disabled }) {
   return (
-    <div className="search">
+    <div className="search" role="search">
       <svg className="search-icon" viewBox="0 0 24 24" width="20" height="20">
         <path
           fill="currentColor"
@@ -201,8 +203,9 @@ function SearchBar({ autoFocus, question, setQuestion, ask, disabled }) {
         onChange={(e) => setQuestion(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && ask()}
         placeholder="Ask a complex question…"
+        aria-label="Research question"
       />
-      <button onClick={ask} disabled={disabled}>
+      <button type="button" onClick={ask} disabled={disabled}>
         Explore
       </button>
     </div>
@@ -217,7 +220,7 @@ function formatNumber(n) {
   return n.toFixed(2);
 }
 
-function Sparkline({ data, width = 80, height = 24, color = "#188038" }) {
+function Sparkline({ data, width = 80, height = 24, color = "#107c10" }) {
   if (!data || data.length < 2) return null;
   const values = data.filter((v) => v != null);
   if (values.length < 2) return null;
@@ -263,7 +266,7 @@ function FinanceCard({ data, openExternal }) {
 
   if (!data.symbol && data.price === undefined) return null;
 
-  const changeColor = (data.change ?? 0) >= 0 ? "#188038" : "#d93025";
+  const changeColor = (data.change ?? 0) >= 0 ? "#107c10" : "#c50f1f";
   const changeSign = (data.change ?? 0) >= 0 ? "+" : "";
   const hasHistory = data.priceHistory && data.priceHistory.length >= 2;
   const isEtf = data.type === "etf";
@@ -398,7 +401,12 @@ function SidePanel({
           )}
           {capitalize(node.label)}
         </span>
-        <button className="panel-close" onClick={onClose} aria-label="Close">
+        <button
+          type="button"
+          className="panel-close"
+          onClick={onClose}
+          aria-label="Close details"
+        >
           ×
         </button>
       </div>
@@ -437,13 +445,21 @@ function SidePanel({
         )}
 
         {showDiscuss && (
-          <button className="panel-discuss" onClick={() => onDiscuss(node.id)}>
+          <button
+            type="button"
+            className="panel-discuss"
+            onClick={() => onDiscuss(node.id)}
+          >
             Discuss in Copilot
           </button>
         )}
 
         {canExpand && (
-          <button className="panel-expand" onClick={() => onExpand(node.id)}>
+          <button
+            type="button"
+            className="panel-expand"
+            onClick={() => onExpand(node.id)}
+          >
             Expand this branch
           </button>
         )}
@@ -554,7 +570,11 @@ function SidePanel({
                 onKeyDown={(e) => e.key === "Enter" && submitFollowup()}
                 placeholder="Ask something about this node…"
               />
-              <button onClick={submitFollowup} disabled={!followup.trim()}>
+              <button
+                type="button"
+                onClick={submitFollowup}
+                disabled={!followup.trim()}
+              >
                 Ask
               </button>
             </div>
@@ -848,10 +868,15 @@ export default function App() {
     return (
       <div className="app home">
         <div className="home-inner">
-          <h1 className="brand">
-            <span className="brand-explore">Explore</span>
-            <span className="brand-tree">Tree</span>
-          </h1>
+          <div className="home-brand">
+            <span className="brand-mark" aria-hidden="true">
+              ET
+            </span>
+            <div>
+              <h1 className="brand">ExploreTree</h1>
+              <p>Turn complex questions into an evidence-backed knowledge tree.</p>
+            </div>
+          </div>
           <SearchBar
             autoFocus
             question={question}
@@ -899,8 +924,10 @@ export default function App() {
     >
       <div className="topbar">
         <span className="brand-sm">
-          <span className="brand-explore">Explore</span>
-          <span className="brand-tree">Tree</span>
+          <span className="brand-mark brand-mark--small" aria-hidden="true">
+            ET
+          </span>
+          ExploreTree
         </span>
         {!embedded && (
           <SearchBar
@@ -910,16 +937,20 @@ export default function App() {
             disabled={status === "disconnected"}
           />
         )}
-        <div className="view-toggle">
+        <div className="view-toggle" aria-label="Research view">
           <button
+            type="button"
             className={view === "cards" ? "active" : ""}
             onClick={() => setView("cards")}
+            aria-pressed={view === "cards"}
           >
             Cards
           </button>
           <button
+            type="button"
             className={view === "map" ? "active" : ""}
             onClick={() => setView("map")}
+            aria-pressed={view === "map"}
           >
             Map
           </button>

@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
-import { useApp } from "@modelcontextprotocol/ext-apps/react";
+import { useApp, useHostStyles } from "@modelcontextprotocol/ext-apps/react";
 
 const McpBridgeContext = createContext(null);
 
@@ -39,6 +39,7 @@ export function McpBridgeProvider({ children }) {
       };
     },
   });
+  useHostStyles(app, app?.getHostContext());
 
   useEffect(() => {
     if (!app || !isConnected) return;

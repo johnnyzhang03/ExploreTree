@@ -12,8 +12,11 @@ Based on Microsoft's [User experience guidelines for MCP apps in declarative age
 
 ## 2. Adopt Fluent 2
 
-- Add Fluent React components and icons.
-- Use host-aware light and dark themes.
+- Use the MCP Apps SDK's host-provided Fluent variables and fonts. The
+  organization package policy blocks installing the Fluent React package, so
+  controls remain dependency-free while following Fluent 2 behavior and visual
+  tokens.
+- Use host-aware light and dark themes with local Fluent fallbacks.
 - Apply Fluent typography, spacing tokens, radii, focus styles, and 24px card padding.
 - Replace the current Google-style colors and custom controls.
 

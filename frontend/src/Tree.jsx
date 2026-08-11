@@ -210,6 +210,7 @@ export default function Tree({ nodes, nodeStates = {}, onSelectNode, selectedId 
             .attr("y1", HEADER_H)
             .attr("y2", HEADER_H);
 
+          content.append("text").attr("class", "node-option");
           content.append("text").attr("class", "node-label");
           content.append("text").attr("class", "node-insight");
           content.append("g").attr("class", "node-badges");
@@ -240,6 +241,10 @@ export default function Tree({ nodes, nodeStates = {}, onSelectNode, selectedId 
     });
 
     const isRoot = (d) => d.data.depth === 0;
+    // Compare-mode cards carry an option caption, so the label sits lower and
+    // gets one line instead of two to stay inside the header band.
+    const hasOption = (d) =>
+      !isRoot(d) && Boolean(d.data.option && d.data.criterion);
 
     // header band + divider hidden for the root (it's a centered title card)
     node
@@ -250,12 +255,24 @@ export default function Tree({ nodes, nodeStates = {}, onSelectNode, selectedId 
       .attr("display", (d) => (isRoot(d) ? "none" : null));
 
     node
+      .select("text.node-option")
+      .attr("display", (d) => (hasOption(d) ? null : "none"))
+      .attr("x", PAD)
+      .attr("y", PAD + 6)
+      .attr("data-text", (d) => (hasOption(d) ? d.data.option : ""))
+      .call(wrap, NODE_W - PAD * 2, 16, 1);
+
+    node
       .select("text.node-label")
       .attr("text-anchor", (d) => (isRoot(d) ? "middle" : "start"))
       .attr("x", (d) => (isRoot(d) ? NODE_W / 2 : PAD))
-      .attr("y", (d) => (isRoot(d) ? NODE_H / 2 - 14 : PAD + 12))
+      .attr("y", (d) =>
+        isRoot(d) ? NODE_H / 2 - 14 : hasOption(d) ? PAD + 30 : PAD + 12
+      )
       .attr("data-text", (d) => capitalize(d.data.label))
-      .call(wrap, NODE_W - PAD * 2, 22, 2);
+      .each(function (d) {
+        d3.select(this).call(wrap, NODE_W - PAD * 2, 22, hasOption(d) ? 1 : 2);
+      });
 
     node
       .select("text.node-insight")

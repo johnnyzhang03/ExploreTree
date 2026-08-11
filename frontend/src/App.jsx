@@ -1,10 +1,24 @@
 import React, { useEffect, useRef, useState } from "react";
+import {
+  Badge,
+  Button,
+  Divider,
+  Input,
+  Label,
+  Slider,
+  ToggleButton,
+} from "@fluentui/react-components";
+import { Dismiss20Regular, Search20Regular } from "@fluentui/react-icons";
 import Tree from "./Tree.jsx";
 import CardView from "./CardView.jsx";
+import InlineResearchWidget from "./InlineResearchWidget.jsx";
+import { EvidenceSummary, InsightSurface } from "./InsightSurface.jsx";
+import { useMcpBridge } from "./McpBridge.jsx";
+import { VERTICALS, nodeVerticals } from "./verticals.js";
 
 // Same-origin in production (FastAPI serves this build); falls back to the
 // dev-server origin locally, where Vite proxies /ws to the backend.
-const WS_URL =
+const STANDALONE_WS_URL =
   (window.location.protocol === "https:" ? "wss://" : "ws://") +
   window.location.host +
   "/ws";
@@ -14,6 +28,136 @@ const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 // Source/media URLs come from external search results; only allow http(s) in
 // href so a javascript:/data: URL can't execute when clicked.
 const safeUrl = (url) => (/^https?:\/\//i.test(url || "") ? url : undefined);
+
+function completionArtifactFor(sessionId, brief, nodes) {
+  const allNodes = Object.values(nodes);
+  const completedNodes = allNodes
+    .filter((node) => node.parentId && node.status === "done" && node.insight)
+    .sort((a, b) => a.depth - b.depth);
+  const verticals = [
+    ...new Set(completedNodes.flatMap((node) => node.verticals || [])),
+  ];
+  const sourceCount = new Set(
+    completedNodes.flatMap((node) =>
+      (node.sources || []).map((source) => source.url).filter(Boolean)
+    )
+  ).size;
+  const domains = new Set(
+    completedNodes.flatMap((node) =>
+      (node.sources || []).map((source) => source.domain).filter(Boolean)
+    )
+  );
+  const datedSourceCount = new Set(
+    completedNodes.flatMap((node) =>
+      (node.sources || []).map((source) => source.publishedAt).filter(Boolean)
+    )
+  ).size;
+  const root = allNodes.find((node) => node.parentId === null);
+  const branchCount = root
+    ? allNodes.filter((node) => node.parentId === root.id).length
+    : 0;
+  const allEvidenceGaps = completedNodes.filter(
+    (node) =>
+      node.evidenceCoverage?.gaps?.noEvidence ?? !(node.sources || []).length
+  );
+
+  return {
+    type: "exploretree.completion",
+    sessionId,
+    status: "completed",
+    question: brief.question,
+    coverage: {
+      completedNodes: completedNodes.length,
+      sources: sourceCount,
+      domains: domains.size,
+      datedSources: datedSourceCount,
+      topLevelBranches: branchCount,
+      evidenceGaps: allEvidenceGaps.length,
+      maximumDepth: Math.max(0, ...completedNodes.map((node) => node.depth || 0)),
+      verticals,
+    },
+  };
+}
+
+function modelContextFor(artifact) {
+  return [
+    "ExploreTree has completed, but this context intentionally contains coverage metadata only and no research findings.",
+    "Do not generate an unsolicited response. Wait for the user's next message.",
+    `When the user later requests insights, call get_research_results with session ID ${artifact.sessionId} before answering.`,
+    JSON.stringify(artifact),
+  ].join("\n");
+}
+
+function branchContextFor(sessionId, selectedId, nodes) {
+  const selected = nodes[selectedId];
+  const children = {};
+  Object.values(nodes).forEach((node) => {
+    if (!node.parentId) return;
+    if (!children[node.parentId]) children[node.parentId] = [];
+    children[node.parentId].push(node.id);
+  });
+
+  const path = [];
+  const seen = new Set();
+  let current = selected;
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    path.push({ nodeId: current.id, title: current.label });
+    current = current.parentId ? nodes[current.parentId] : null;
+  }
+
+  const pending = [selectedId];
+  const findings = [];
+  while (pending.length && findings.length < 12) {
+    const nodeId = pending.shift();
+    const node = nodes[nodeId];
+    if (!node) continue;
+    findings.push({
+      nodeId: node.id,
+      parentId: node.parentId,
+      title: node.label,
+      status: node.status,
+      insight: node.insight || "",
+      evidenceCount:
+        node.evidenceCoverage?.sourceCount ?? (node.sources || []).length,
+      evidenceCoverage: node.evidenceCoverage,
+      sources: (node.sources || [])
+        .filter((source) => source.url)
+        .slice(0, 2)
+        .map((source) => ({
+          title: source.title || source.url,
+          url: source.url,
+          domain: source.domain,
+          publishedAt: source.publishedAt,
+        })),
+    });
+    pending.push(...(children[nodeId] || []));
+  }
+
+  return {
+    type: "exploretree.branch-context",
+    sessionId,
+    status: "selected",
+    branches: [
+      {
+        nodeId: selected.id,
+        title: selected.label,
+        path: path.reverse(),
+        findings,
+        truncated: pending.length > 0,
+      },
+    ],
+  };
+}
+
+function branchModelContextFor(context) {
+  return [
+    "The user explicitly selected this ExploreTree branch for discussion.",
+    "Use only the compact branch context below. Do not imply that it contains the full research tree.",
+    "Discuss what the branch establishes, its evidence gaps, or its relevance to the user's request. Cite supplied source URLs when relevant.",
+    JSON.stringify(context),
+  ].join("\n");
+}
 
 // Map (depth, breadth) to a human "vibe" label shown next to the sliders.
 function vibeOf(depth, breadth) {
@@ -25,54 +169,74 @@ function vibeOf(depth, breadth) {
 
 function ScopeControls({ depth, breadth, setDepth, setBreadth }) {
   const vibe = vibeOf(depth, breadth);
+  const vibeColor =
+    vibe === "Quick" ? "success" : vibe === "Deep" ? "warning" : "informative";
   return (
-    <div className="scope">
+    <div className="scope" aria-label="Research scope">
       <div className="scope-row">
-        <label>Depth</label>
-        <input
-          type="range"
+        <Label htmlFor="research-depth" size="small">
+          Depth
+        </Label>
+        <Slider
+          id="research-depth"
           min="1"
           max="4"
           value={depth}
-          onChange={(e) => setDepth(Number(e.target.value))}
+          onChange={(_, data) => setDepth(data.value)}
         />
-        <span className="scope-val">{depth}</span>
+        <Badge appearance="outline" className="scope-val">
+          {depth}
+        </Badge>
       </div>
       <div className="scope-row">
-        <label>Breadth</label>
-        <input
-          type="range"
+        <Label htmlFor="research-breadth" size="small">
+          Breadth
+        </Label>
+        <Slider
+          id="research-breadth"
           min="1"
           max="4"
           value={breadth}
-          onChange={(e) => setBreadth(Number(e.target.value))}
+          onChange={(_, data) => setBreadth(data.value)}
         />
-        <span className="scope-val">{breadth}</span>
+        <Badge appearance="outline" className="scope-val">
+          {breadth}
+        </Badge>
       </div>
-      <div className={`scope-vibe vibe-${vibe.toLowerCase()}`}>{vibe}</div>
+      <Badge
+        appearance="tint"
+        color={vibeColor}
+        className={`scope-vibe vibe-${vibe.toLowerCase()}`}
+      >
+        {vibe}
+      </Badge>
     </div>
   );
 }
 
 function SearchBar({ autoFocus, question, setQuestion, ask, disabled }) {
   return (
-    <div className="search">
-      <svg className="search-icon" viewBox="0 0 24 24" width="20" height="20">
-        <path
-          fill="currentColor"
-          d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0A4.5 4.5 0 1 1 14 9.5 4.49 4.49 0 0 1 9.5 14Z"
-        />
-      </svg>
-      <input
+    <div className="search" role="search">
+      <Input
+        className="search-input"
+        contentBefore={<Search20Regular />}
+        size="large"
         autoFocus={autoFocus}
         value={question}
-        onChange={(e) => setQuestion(e.target.value)}
+        onChange={(_, data) => setQuestion(data.value)}
         onKeyDown={(e) => e.key === "Enter" && ask()}
         placeholder="Ask a complex question…"
+        aria-label="Research question"
       />
-      <button onClick={ask} disabled={disabled}>
+      <Button
+        type="button"
+        appearance="primary"
+        size="large"
+        onClick={ask}
+        disabled={disabled}
+      >
         Explore
-      </button>
+      </Button>
     </div>
   );
 }
@@ -85,17 +249,23 @@ function formatNumber(n) {
   return n.toFixed(2);
 }
 
-function Sparkline({ data, width = 80, height = 24, color = "#188038" }) {
+function Sparkline({ data, width = 80, height = 24, color = "#107c10" }) {
   if (!data || data.length < 2) return null;
-  const values = data.filter((v) => v != null);
+  const values = data.map(Number).filter(Number.isFinite);
   if (values.length < 2) return null;
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const range = max - min || 1;
+  const range = max - min;
+  const padding = 2;
   const points = values
     .map((v, i) => {
       const x = (i / (values.length - 1)) * width;
-      const y = height - ((v - min) / range) * (height - 2) - 1;
+      const y =
+        range === 0
+          ? height / 2
+          : height -
+            padding -
+            ((v - min) / range) * (height - padding * 2);
       return `${x},${y}`;
     })
     .join(" ");
@@ -106,18 +276,80 @@ function Sparkline({ data, width = 80, height = 24, color = "#188038" }) {
   );
 }
 
-function FinanceCard({ data, safeUrl }) {
+function PriceChangeLine({
+  previousClose,
+  currentPrice,
+  width = 80,
+  height = 24,
+  color = "#107c10",
+}) {
+  const previous = Number(previousClose);
+  const current = Number(currentPrice);
+  if (!Number.isFinite(previous) || !Number.isFinite(current) || previous === 0) {
+    return null;
+  }
+
+  const changePercent = ((current - previous) / previous) * 100;
+  const scaleLimit = 10;
+  const normalized = Math.max(
+    -1,
+    Math.min(1, changePercent / scaleLimit)
+  );
+  const padding = 2;
+  const midpoint = height / 2;
+  const endY = midpoint - normalized * (midpoint - padding);
+
+  return (
+    <svg
+      className="sparkline"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      aria-label={`Previous close to current price: ${changePercent.toFixed(2)}%`}
+      role="img"
+    >
+      <line
+        x1={padding}
+        x2={width - padding}
+        y1={midpoint}
+        y2={midpoint}
+        stroke="var(--color-border-secondary)"
+        strokeWidth="1"
+      />
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        points={`${padding},${midpoint} ${width - padding},${endY}`}
+      />
+    </svg>
+  );
+}
+
+function FinanceCard({ data, openExternal }) {
   if (!data) return null;
 
   if (data.type === "link") {
+    const url = safeUrl(data.url);
     return (
       <a
-        href={safeUrl(data.url)}
+        href={url}
         target="_blank"
         rel="noopener noreferrer"
         className="finance-link-card"
+        onClick={(event) => {
+          if (!url) return;
+          event.preventDefault();
+          openExternal(url);
+        }}
       >
-        <span className="src-badge src-finance">Finance</span>
+        <Badge
+          size="small"
+          appearance="filled"
+          className="src-badge src-finance"
+        >
+          Finance
+        </Badge>
         <span className="finance-link-title">{data.title || data.url}</span>
       </a>
     );
@@ -125,9 +357,13 @@ function FinanceCard({ data, safeUrl }) {
 
   if (!data.symbol && data.price === undefined) return null;
 
-  const changeColor = (data.change ?? 0) >= 0 ? "#188038" : "#d93025";
+  const changeColor = (data.change ?? 0) >= 0 ? "#107c10" : "#c50f1f";
   const changeSign = (data.change ?? 0) >= 0 ? "+" : "";
-  const hasHistory = data.priceHistory && data.priceHistory.length >= 2;
+  const hasHistory = data.priceHistory && data.priceHistory.length >= 3;
+  const hasPriceChange =
+    !hasHistory &&
+    Number.isFinite(Number(data.previousClose)) &&
+    Number.isFinite(Number(data.price));
   const isEtf = data.type === "etf";
   const isIndex = data.type === "index";
 
@@ -145,6 +381,10 @@ function FinanceCard({ data, safeUrl }) {
             rel="noopener noreferrer"
             className="finance-link"
             title="View details"
+            onClick={(event) => {
+              event.preventDefault();
+              openExternal(safeUrl(data.url));
+            }}
           >
             ↗
           </a>
@@ -166,7 +406,20 @@ function FinanceCard({ data, safeUrl }) {
           </div>
         )}
         {hasHistory && (
-          <Sparkline data={data.priceHistory} width={100} height={28} color={changeColor} />
+          <span title={data.priceHistoryLabel || "Price history"}>
+            <Sparkline data={data.priceHistory} width={100} height={28} color={changeColor} />
+          </span>
+        )}
+        {hasPriceChange && (
+          <span title="Previous close to current price">
+            <PriceChangeLine
+              previousClose={data.previousClose}
+              currentPrice={data.price}
+              width={100}
+              height={28}
+              color={changeColor}
+            />
+          </span>
         )}
       </div>
       <div className="finance-metrics">
@@ -211,13 +464,36 @@ function FinanceCard({ data, safeUrl }) {
   );
 }
 
-function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
+function PanelSectionHeading({ children }) {
+  return (
+    <>
+      <Divider className="panel-section-divider" />
+      <div className="panel-section-label">{children}</div>
+    </>
+  );
+}
+
+function SidePanel({
+  node,
+  media,
+  isLeaf,
+  onExpand,
+  onFollowup,
+  onClose,
+  openExternal,
+  showFollowup,
+  showDiscuss,
+  onDiscuss,
+}) {
   const [followup, setFollowup] = useState("");
   if (!node) return null;
   const allSources = node.sources || [];
   const financeData = allSources.filter((s) => s.finance).map((s) => s.finance);
   // videos render in their own thumbnail section below; finance has its own card
   const sources = allSources.filter((s) => !s.finance && s.vertical !== "videos");
+  const coverage = node.evidenceCoverage;
+  const primaryVertical = nodeVerticals(node)[0];
+  const insightAccent = VERTICALS[primaryVertical]?.color || "#0f6cbd";
   const canExpand = isLeaf && node.status === "done";
   const images = media?.images || [];
   const videos = media?.videos || [];
@@ -236,49 +512,97 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
   return (
     <aside className="panel">
       <div className="panel-head">
-        <span className="panel-title">{capitalize(node.label)}</span>
-        <button className="panel-close" onClick={onClose} aria-label="Close">
-          ×
-        </button>
+        <span className="panel-title">
+          {node.option && node.criterion && (
+            <span className="panel-option">{node.option}</span>
+          )}
+          {capitalize(node.label)}
+        </span>
+        <Button
+          type="button"
+          appearance="subtle"
+          icon={<Dismiss20Regular />}
+          className="panel-close"
+          onClick={onClose}
+          aria-label="Close details"
+        />
       </div>
       <div className="panel-body">
-        <div className="panel-section-label">Insight</div>
-        <p className="panel-insight">
+        <InsightSurface
+          label="Key insight"
+          accent={insightAccent}
+          className="panel-insight-surface"
+          footer={
+            coverage && node.parentId && node.status === "done" ? (
+              <EvidenceSummary coverage={coverage} />
+            ) : null
+          }
+        >
           {node.status === "done"
             ? node.insight || "No insight generated."
             : node.status === "searching"
             ? "searching…"
             : "pending…"}
-        </p>
+        </InsightSurface>
+
+        {showDiscuss && (
+          <Button
+            type="button"
+            appearance="secondary"
+            className="panel-discuss"
+            onClick={() => onDiscuss(node.id)}
+          >
+            Discuss in Copilot
+          </Button>
+        )}
 
         {canExpand && (
-          <button className="panel-expand" onClick={() => onExpand(node.id)}>
+          <Button
+            type="button"
+            appearance="primary"
+            className="panel-expand"
+            onClick={() => onExpand(node.id)}
+          >
             Expand this branch
-          </button>
+          </Button>
         )}
 
         {financeData.length > 0 && (
           <>
-            <div className="panel-section-label">Finance</div>
+            <PanelSectionHeading>Finance</PanelSectionHeading>
             <div className="finance-cards">
               {financeData.map((fd, i) => (
-                <FinanceCard key={fd.symbol || fd.url || i} data={fd} safeUrl={safeUrl} />
+                <FinanceCard
+                  key={fd.symbol || fd.url || i}
+                  data={fd}
+                  openExternal={openExternal}
+                />
               ))}
             </div>
           </>
         )}
 
-        <div className="panel-section-label">
-          Sources {sources.length ? `(${sources.length})` : ""}
-        </div>
+        <PanelSectionHeading>Sources</PanelSectionHeading>
         {sources.length ? (
           <ul className="panel-sources">
             {sources.map((s, i) => (
               <li key={i}>
-                <span className={`src-badge src-${s.vertical || "web"}`}>
+                <Badge
+                  size="small"
+                  appearance="filled"
+                  className={`src-badge src-${s.vertical || "web"}`}
+                >
                   {s.vertical || "web"}
-                </span>
-                <a href={safeUrl(s.url)} target="_blank" rel="noopener noreferrer">
+                </Badge>
+                <a
+                  href={safeUrl(s.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openExternal(safeUrl(s.url));
+                  }}
+                >
                   {s.title || s.url}
                 </a>
               </li>
@@ -288,7 +612,7 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
           <p className="panel-empty">No sources yet.</p>
         )}
 
-        <div className="panel-section-label">Images</div>
+        <PanelSectionHeading>Images</PanelSectionHeading>
         {media ? (
           images.length ? (
             <div className="media-grid">
@@ -300,6 +624,10 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
                   rel="noopener noreferrer"
                   className="media-thumb"
                   title={im.title}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openExternal(safeUrl(im.link));
+                  }}
                 >
                   <img src={im.thumbnail} alt={im.title} loading="lazy" />
                 </a>
@@ -314,7 +642,7 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
 
         {media && videos.length > 0 && (
           <>
-            <div className="panel-section-label">Videos</div>
+            <PanelSectionHeading>Videos</PanelSectionHeading>
             <div className="media-videos">
               {videos.slice(0, 4).map((v, i) => (
                 <a
@@ -323,6 +651,10 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="video-card"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openExternal(safeUrl(v.link));
+                  }}
                 >
                   <img src={v.thumbnail} alt={v.title} loading="lazy" />
                   <div className="video-meta">
@@ -335,24 +667,46 @@ function SidePanel({ node, media, isLeaf, onExpand, onFollowup, onClose }) {
           </>
         )}
 
-        <div className="panel-section-label">Ask a follow-up</div>
-        <div className="panel-followup">
-          <input
-            value={followup}
-            onChange={(e) => setFollowup(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submitFollowup()}
-            placeholder="Ask something about this node…"
-          />
-          <button onClick={submitFollowup} disabled={!followup.trim()}>
-            Ask
-          </button>
-        </div>
+        {showFollowup && (
+          <>
+            <PanelSectionHeading>Ask a follow-up</PanelSectionHeading>
+            <div className="panel-followup">
+              <Input
+                value={followup}
+                onChange={(_, data) => setFollowup(data.value)}
+                onKeyDown={(e) => e.key === "Enter" && submitFollowup()}
+                placeholder="Ask something about this node…"
+              />
+              <Button
+                type="button"
+                appearance="primary"
+                onClick={submitFollowup}
+                disabled={!followup.trim()}
+              >
+                Ask
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </aside>
   );
 }
 
 export default function App() {
+  const {
+    embedded,
+    toolData,
+    isConnected: mcpConnected,
+    isFullscreen,
+    containerHeight,
+    canFullscreen,
+    callTool,
+    openExternal,
+    toggleFullscreen,
+    updateModelContext,
+    sendMessage,
+  } = useMcpBridge();
   const [question, setQuestion] = useState(
     "What's driving the recent surge in AI chip demand?"
   );
@@ -366,16 +720,67 @@ export default function App() {
   const [breadth, setBreadth] = useState(2);
   const [view, setView] = useState("cards"); // "cards" | "map"
   const [path, setPath] = useState([]); // node-id trail for the card view
+  const [sessionId, setSessionId] = useState(null);
+  const [streamUrl, setStreamUrl] = useState(null);
+  const [researchBrief, setResearchBrief] = useState({ question });
+  const [comparison, setComparison] = useState(null); // aligned compare-mode frame
   const wsRef = useRef(null);
+  const nodesRef = useRef({});
+  const briefRef = useRef(researchBrief);
+  const sessionIdRef = useRef(sessionId);
+  const completionAnnouncementsRef = useRef(new Set());
+  const clientIdRef = useRef(
+    globalThis.crypto?.randomUUID?.() ||
+      `widget-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
+  briefRef.current = researchBrief;
+  sessionIdRef.current = sessionId;
 
   useEffect(() => {
-    const ws = new WebSocket(WS_URL);
+    if (!embedded || toolData?.type !== "exploration") return;
+    const incomingNodes = Object.fromEntries(
+      (toolData.nodes || []).map((node) => [node.id, node])
+    );
+    const isNewSession = toolData.sessionId !== sessionId;
+    setSessionId(toolData.sessionId);
+    setStreamUrl(toolData.streamUrl);
+    setQuestion(toolData.question || "");
+    setResearchBrief(toolData.brief || { question: toolData.question || "" });
+    setStarted(true);
+    if (isNewSession) {
+      setStatus(
+        toolData.status === "completed"
+          ? "Done"
+          : toolData.status === "failed"
+          ? "Error"
+          : "exploring"
+      );
+      nodesRef.current = incomingNodes;
+      setNodes(incomingNodes);
+      setNodeStates({});
+      setMedia({});
+      setSelectedId(null);
+      setPath([]);
+      setComparison(toolData.comparison || null);
+    } else {
+      nodesRef.current = { ...nodesRef.current, ...incomingNodes };
+      setNodes((previous) => ({ ...previous, ...incomingNodes }));
+    }
+  }, [embedded, toolData, sessionId]);
+
+  useEffect(() => {
+    const url = embedded ? streamUrl : STANDALONE_WS_URL;
+    if (!url) return;
+    const ws = new WebSocket(url);
     wsRef.current = ws;
-    ws.onopen = () => setStatus("Ready");
+    ws.onopen = () => {
+      if (!embedded) setStatus("Ready");
+    };
     ws.onclose = () => setStatus("disconnected");
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
       if (msg.type === "node_added" || msg.type === "node_updated") {
+        nodesRef.current = { ...nodesRef.current, [msg.node.id]: msg.node };
         setNodes((prev) => ({ ...prev, [msg.node.id]: msg.node }));
       } else if (msg.type === "node_state") {
         setNodeStates((prev) => {
@@ -388,40 +793,130 @@ export default function App() {
         });
       } else if (msg.type === "planning") {
         setStatus("Planning…");
+      } else if (msg.type === "mode") {
+        setComparison(
+          msg.mode === "compare"
+            ? { options: msg.options || [], criteria: msg.criteria || [] }
+            : null
+        );
       } else if (msg.type === "media") {
         setMedia((prev) => ({
           ...prev,
           [msg.node_id]: { images: msg.images || [], videos: msg.videos || [] },
         }));
+        setStatus((current) => (current === "Working…" ? "Ready" : current));
       } else if (msg.type === "done") {
         setStatus("Done");
+        if (embedded) {
+          const completedSessionId = sessionIdRef.current;
+          if (
+            !completedSessionId ||
+            completionAnnouncementsRef.current.has(completedSessionId)
+          ) {
+            return;
+          }
+          completionAnnouncementsRef.current.add(completedSessionId);
+          ws.send(
+            JSON.stringify({
+              type: "claim_completion_handoff",
+              client_id: clientIdRef.current,
+            })
+          );
+        }
+      } else if (
+        msg.type === "completion_handoff_claim" &&
+        msg.client_id === clientIdRef.current &&
+        msg.claimed
+      ) {
+        const completedSessionId = sessionIdRef.current;
+        if (embedded && completedSessionId) {
+          const artifact = completionArtifactFor(
+            completedSessionId,
+            briefRef.current,
+            nodesRef.current
+          );
+          updateModelContext(modelContextFor(artifact), artifact).catch((error) => {
+              completionAnnouncementsRef.current.delete(completedSessionId);
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "release_completion_handoff" }));
+              }
+              console.warn("Failed to update Copilot research context", error);
+            });
+        }
+      } else if (msg.type === "error") {
+        setStatus(msg.message || "Error");
       }
     };
     return () => ws.close();
-  }, []);
+  }, [embedded, streamUrl, updateModelContext]);
 
   const ask = () => {
+    if (embedded) return;
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     if (!question.trim()) return;
     setNodes({});
+    nodesRef.current = {};
     setNodeStates({});
     setMedia({});
     setStarted(true);
     setSelectedId(null);
     setPath([]);
+    setComparison(null);
     setStatus("exploring");
     wsRef.current.send(
       JSON.stringify({ type: "ask", question, depth, breadth })
     );
   };
 
-  const send = (payload) => {
+  const send = async (payload) => {
+    if (embedded) {
+      if (!sessionId || !mcpConnected) return;
+      if (payload.type !== "get_media") {
+        setStatus("Working…");
+      }
+      try {
+        if (payload.type === "expand_node") {
+          await callTool("expand_node", {
+            session_id: sessionId,
+            node_id: payload.node_id,
+          });
+        } else if (payload.type === "followup") {
+          await callTool("add_followup", {
+            session_id: sessionId,
+            parent_id: payload.parent_id,
+            question: payload.query,
+          });
+        } else if (payload.type === "get_media") {
+          await callTool("get_node_media", {
+            session_id: sessionId,
+            node_id: payload.node_id,
+          });
+        }
+      } catch (error) {
+        setStatus(error.message || "Tool call failed");
+      }
+      return;
+    }
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify(payload));
   };
   const expandNode = (id) => send({ type: "expand_node", node_id: id });
   const followup = (id, query) =>
     send({ type: "followup", parent_id: id, query });
+  const discussBranch = async (id) => {
+    if (!embedded || !sessionId || !nodes[id]) return;
+    const context = branchContextFor(sessionId, id, nodes);
+    setStatus("Sharing branch…");
+    try {
+      await updateModelContext(branchModelContextFor(context), context);
+      await sendMessage(`Discuss the "${nodes[id].label}" branch.`);
+      setStatus((current) =>
+        current === "Sharing branch…" ? "Ready" : current
+      );
+    } catch (error) {
+      setStatus(error.message || "Failed to share branch");
+    }
+  };
 
   // a node is an unexpanded leaf if nothing else points to it as parent
   const parentIds = new Set(
@@ -452,7 +947,6 @@ export default function App() {
     status === "Planning…" ||
     nodeStates[pageNodeId] === "expanding" ||
     nodeStates[pageNodeId] === "considering";
-
   // Fetch media as soon as a node's panel is opened. Media is keyed off the
   // node's label (set at creation), so it does NOT need the node's search to
   // finish — fetching on selection lets thumbnails stream in while the tree
@@ -464,14 +958,38 @@ export default function App() {
     send({ type: "get_media", node_id: selectedId });
   }, [selectedId, nodes]);
 
+  if (embedded && !started) {
+    return (
+      <div className="app mcp-inline">
+        <InlineResearchWidget
+          question=""
+          nodes={{}}
+          status={
+            mcpConnected
+              ? "Planning…"
+              : "Connecting to Microsoft 365 Copilot…"
+          }
+          comparison={null}
+          canExpand={false}
+          onExpand={toggleFullscreen}
+        />
+      </div>
+    );
+  }
+
   if (!started) {
     return (
       <div className="app home">
         <div className="home-inner">
-          <h1 className="brand">
-            <span className="brand-explore">Explore</span>
-            <span className="brand-tree">Tree</span>
-          </h1>
+          <div className="home-brand">
+            <span className="brand-mark" aria-hidden="true">
+              ET
+            </span>
+            <div>
+              <h1 className="brand">ExploreTree</h1>
+              <p>Turn complex questions into an evidence-backed knowledge tree.</p>
+            </div>
+          </div>
           <SearchBar
             autoFocus
             question={question}
@@ -490,34 +1008,100 @@ export default function App() {
     );
   }
 
+  if (embedded && !isFullscreen) {
+    return (
+      <div className="app mcp-inline">
+        <InlineResearchWidget
+          question={researchBrief.question || question}
+          nodes={nodes}
+          status={status}
+          comparison={comparison}
+          canExpand={canFullscreen}
+          onExpand={toggleFullscreen}
+        />
+      </div>
+    );
+  }
+
+  const expandedHeight =
+    containerHeight && containerHeight >= 720 ? containerHeight : 1200;
+  const normalizedStatus = status.toLowerCase();
+  const statusIsActive =
+    normalizedStatus === "exploring" ||
+    normalizedStatus.includes("planning") ||
+    normalizedStatus.includes("working") ||
+    normalizedStatus.includes("sharing");
+  const statusLabel = normalizedStatus === "exploring" ? "Researching" : status;
+
   return (
-    <div className="app">
+    <div
+      className={`app ${embedded ? "mcp-app" : ""} ${isFullscreen ? "fullscreen" : ""}`}
+      style={
+        embedded && isFullscreen
+          ? { "--mcp-expanded-height": `${expandedHeight}px` }
+          : undefined
+      }
+    >
       <div className="topbar">
         <span className="brand-sm">
-          <span className="brand-explore">Explore</span>
-          <span className="brand-tree">Tree</span>
+          <span className="brand-mark brand-mark--small" aria-hidden="true">
+            ET
+          </span>
+          ExploreTree
         </span>
-        <SearchBar
-          question={question}
-          setQuestion={setQuestion}
-          ask={ask}
-          disabled={status === "disconnected"}
-        />
-        <div className="view-toggle">
-          <button
-            className={view === "cards" ? "active" : ""}
+        {!embedded && (
+          <SearchBar
+            question={question}
+            setQuestion={setQuestion}
+            ask={ask}
+            disabled={status === "disconnected"}
+          />
+        )}
+        <div className="view-toggle" role="group" aria-label="Research view">
+          <ToggleButton
+            size="medium"
+            appearance={view === "cards" ? "primary" : "subtle"}
+            checked={view === "cards"}
             onClick={() => setView("cards")}
           >
             Cards
-          </button>
-          <button
-            className={view === "map" ? "active" : ""}
+          </ToggleButton>
+          <ToggleButton
+            size="medium"
+            appearance={view === "map" ? "primary" : "subtle"}
+            checked={view === "map"}
             onClick={() => setView("map")}
           >
             Map
-          </button>
+          </ToggleButton>
         </div>
-        <span className="status">{status}</span>
+        {comparison && (
+          <Badge
+            appearance="tint"
+            color="informative"
+            className="mode-chip"
+            title={`Comparing ${comparison.options.join(", ")} against ${comparison.criteria.join(", ")}`}
+          >
+            Comparing {comparison.options.length} options
+          </Badge>
+        )}
+        <Badge
+          appearance="tint"
+          size="large"
+          icon={<span className="status-dot" aria-hidden="true" />}
+          color={
+            status === "Done"
+              ? "success"
+              : status === "disconnected" ||
+                normalizedStatus.includes("error") ||
+                normalizedStatus.includes("fail")
+              ? "danger"
+              : "informative"
+          }
+          className={`status ${statusIsActive ? "status--active" : ""}`}
+        >
+          {statusLabel}
+        </Badge>
       </div>
       <div className="canvas">
         {view === "map" ? (
@@ -545,9 +1129,12 @@ export default function App() {
           onExpand={expandNode}
           onFollowup={followup}
           onClose={() => setSelectedId(null)}
+          openExternal={openExternal}
+          showFollowup={!embedded}
+          showDiscuss={embedded && mcpConnected}
+          onDiscuss={discussBranch}
         />
       </div>
     </div>
   );
 }
-

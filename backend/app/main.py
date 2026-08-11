@@ -1,101 +1,202 @@
 import asyncio
 import json
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+
+from . import llm
 from fastapi.staticfiles import StaticFiles
 
-from .agent import add_followup, expand_on_demand, explore, get_media
-from .tree import Tree
+from .config import settings
+from .mcp_server import mcp, mcp_http_app
+from .sessions import SessionNotFoundError, sessions
 
-app = FastAPI(title="ExploreTree")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with mcp.session_manager.run():
+        yield
+
+
+app = FastAPI(title="ExploreTree", lifespan=lifespan)
+
+
+def _origin(value: str) -> str:
+    parsed = urlsplit(value)
+    return f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ""
+
+
+allowed_origins = {
+    "http://localhost:5173",
+    _origin(settings.public_base_url),
+    _origin(settings.mcp_widget_origin),
+}
+allowed_origins.discard("")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=sorted(allowed_origins),
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "mcp-session-id"],
 )
 
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "providers": {
+            "bing": bool(settings.bing_search_key),
+            "openai": llm.provider_diagnostics(),
+        },
+    }
+
+
+def _websocket_origin_allowed(websocket: WebSocket) -> bool:
+    origin = websocket.headers.get("origin", "")
+    if origin in allowed_origins:
+        return True
+    parsed = urlsplit(origin)
+    hostname = parsed.hostname or ""
+    widget_suffixes = (
+        ".widget-renderer.usercontent.microsoft",
+        ".widget-renderer.usercontent.microsoft.com",
+        ".widget-renderer.usercontent.dev.microsoft",
+        ".widget-renderer.usgovcloud-usercontent.microsoft",
+        ".dod.widget-renderer.usgovcloud-usercontent.microsoft",
+    )
+    return parsed.scheme == "https" and hostname.endswith(widget_suffixes)
+
+
+async def _forward_session(websocket: WebSocket, session_id: str) -> None:
+    session = sessions.get(session_id)
+    backlog, queue = await session.subscribe()
+    try:
+        for event in backlog:
+            await websocket.send_text(json.dumps(event))
+        while True:
+            await websocket.send_text(json.dumps(await queue.get()))
+    finally:
+        await session.unsubscribe(queue)
+
+
+@app.websocket("/ws/sessions/{session_id}")
+async def session_ws(websocket: WebSocket, session_id: str) -> None:
+    if not _websocket_origin_allowed(websocket):
+        await websocket.close(code=4403)
+        return
+    try:
+        sessions.get(session_id)
+    except SessionNotFoundError:
+        await websocket.close(code=4404)
+        return
+    await websocket.accept()
+    forward_task = asyncio.create_task(_forward_session(websocket, session_id))
+    try:
+        while True:
+            message = await websocket.receive_json()
+            if message.get("type") == "claim_completion_handoff":
+                session = sessions.get(session_id)
+                claimed = await session.claim_completion_handoff()
+                await session.publish(
+                    {
+                        "type": "completion_handoff_claim",
+                        "client_id": message.get("client_id"),
+                        "claimed": claimed,
+                    }
+                )
+            elif message.get("type") == "release_completion_handoff":
+                await sessions.get(session_id).release_completion_handoff()
+    except (WebSocketDisconnect, SessionNotFoundError, RuntimeError):
+        return
+    finally:
+        forward_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await forward_task
 
 
 @app.websocket("/ws")
 async def ws(websocket: WebSocket) -> None:
+    if not _websocket_origin_allowed(websocket):
+        await websocket.close(code=4403)
+        return
     await websocket.accept()
-    tree: Tree | None = None  # persists across messages so we can act on nodes later
-    tasks: set[asyncio.Task] = set()
-    grow_task: asyncio.Task | None = None  # in-flight ask/expand/followup, if any
-    # The receive loop must never block on a long operation, or messages sent
-    # during it (e.g. get_media on panel-open while the tree is still growing)
-    # sit unread in the socket buffer until it finishes. So every handler runs as
-    # a tracked task and the loop returns immediately to receive_text(). Concurrent
-    # send_text on one socket would interleave frames, so serialize emits via lock.
-    send_lock = asyncio.Lock()
+    active_session_id: str | None = None
+    forward_task: asyncio.Task | None = None
 
-    async def emit(event: dict) -> None:
-        async with send_lock:
-            await websocket.send_text(json.dumps(event))
-
-    def spawn(coro) -> asyncio.Task:
-        task = asyncio.create_task(coro)
-        tasks.add(task)
-        task.add_done_callback(tasks.discard)
-        return task
+    async def switch_forwarding(session_id: str) -> None:
+        nonlocal forward_task
+        if forward_task is not None:
+            forward_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await forward_task
+        forward_task = asyncio.create_task(
+            _forward_session(websocket, session_id)
+        )
 
     try:
         while True:
-            raw = await websocket.receive_text()
-            msg = json.loads(raw)
+            msg = json.loads(await websocket.receive_text())
             kind = msg.get("type")
 
             if kind == "ask":
                 question = (msg.get("question") or "").strip()
                 if question:
-                    if grow_task is not None:
-                        grow_task.cancel()  # abandon a still-growing previous tree
-                    tree = Tree()  # fresh tree per question
-                    grow_task = spawn(
-                        explore(
-                            question,
-                            emit,
-                            tree,
-                            max_depth=msg.get("depth"),
-                            breadth=msg.get("breadth"),
-                        )
+                    session = sessions.start(
+                        question,
+                        max_depth=msg.get("depth"),
+                        breadth=msg.get("breadth"),
                     )
-            elif kind == "expand_node" and tree is not None:
+                    active_session_id = session.id
+                    await switch_forwarding(session.id)
+            elif kind == "expand_node" and active_session_id:
                 node_id = msg.get("node_id")
                 if node_id:
-                    grow_task = spawn(expand_on_demand(tree, node_id, emit))
-            elif kind == "followup" and tree is not None:
+                    try:
+                        sessions.expand(active_session_id, node_id)
+                    except (SessionNotFoundError, ValueError) as exc:
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "message": str(exc)})
+                        )
+            elif kind == "followup" and active_session_id:
                 parent_id = msg.get("parent_id")
                 query = (msg.get("query") or "").strip()
                 if parent_id and query:
-                    grow_task = spawn(add_followup(tree, parent_id, query, emit))
-            elif kind == "get_media" and tree is not None:
+                    try:
+                        sessions.follow_up(active_session_id, parent_id, query)
+                    except (SessionNotFoundError, ValueError) as exc:
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "message": str(exc)})
+                        )
+            elif kind == "get_media" and active_session_id:
                 node_id = msg.get("node_id")
                 if node_id:
-                    spawn(get_media(tree, node_id, emit))
+                    try:
+                        sessions.fetch_media(active_session_id, node_id)
+                    except (SessionNotFoundError, ValueError) as exc:
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "message": str(exc)})
+                        )
     except WebSocketDisconnect:
         return
     finally:
-        for task in tasks:
-            task.cancel()
+        if forward_task is not None:
+            forward_task.cancel()
 
 
-# Serve the built frontend (single-service deploy). Mounted last so the /health
-# and /ws routes above take precedence; html=True gives SPA fallback to index.html.
-# Tries both layouts: local (backend/app/ -> ../../frontend/dist) and the deployed
-# wwwroot-root layout (app/ -> ../frontend/dist).
+# FastMCP's Streamable HTTP route is added directly so its public endpoint is
+# exactly /mcp while FastAPI remains responsible for the shared application.
+app.router.routes.extend(mcp_http_app.routes)
+
+
+# Serve the built frontend last so API, MCP, and WebSocket routes take precedence.
 _here = Path(__file__).resolve()
 for _candidate in (
-    _here.parent.parent.parent / "frontend" / "dist",  # local: backend/app/..
-    _here.parent.parent / "frontend" / "dist",          # deployed: app/ at root
+    _here.parent.parent.parent / "frontend" / "dist",
+    _here.parent.parent / "frontend" / "dist",
 ):
     if _candidate.is_dir():
         app.mount("/", StaticFiles(directory=_candidate, html=True), name="static")

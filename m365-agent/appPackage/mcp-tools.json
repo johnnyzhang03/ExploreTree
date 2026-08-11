@@ -1,0 +1,227 @@
+{
+  "tools": [
+    {
+      "name": "explore_tree",
+      "title": "Explore a question",
+      "description": "MUST be called for every new valid user question or information-seeking request, including explicit questions, imperative requests, and short topic prompts. Use it even when the question is simple, casual, broad, underspecified, or does not use a research verb. If there is enough topic to begin, infer missing details instead of asking a clarifying question. Start an interactive sourced knowledge-tree investigation instead of answering from general knowledge. This returns before findings are available. After calling it, do not answer the research question or call any other tool in the same conversation turn. Set mode to 'compare' with at least two options when the user is weighing named alternatives; otherwise use 'explore'. Depth and breadth must each be between 1 and 4.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "The complex question to research."
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4,
+            "default": 3
+          },
+          "breadth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4,
+            "default": 2
+          },
+          "objective": {
+            "type": "string",
+            "description": "The decision, task, or outcome this research should support."
+          },
+          "audience": {
+            "type": "string",
+            "description": "Who will consume or act on the findings."
+          },
+          "scope": {
+            "type": "array",
+            "description": "Specific dimensions that the research must cover.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8
+          },
+          "constraints": {
+            "type": "array",
+            "description": "Boundaries, assumptions, exclusions, or requirements to respect.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8
+          },
+          "freshness": {
+            "type": "string",
+            "description": "How recent the evidence should be, such as 'last 12 months'."
+          },
+          "desired_output": {
+            "type": "string",
+            "description": "How the user intends to apply the research, such as an executive recommendation or comparison."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "explore",
+              "compare"
+            ],
+            "default": "explore",
+            "description": "'explore' maps a topic broadly. 'compare' investigates each option in options against the same shared criteria, producing an aligned side-by-side comparison. Use 'compare' only when at least two distinct alternatives are named."
+          },
+          "options": {
+            "type": "array",
+            "description": "The alternatives to compare, in the user's own words. Required for mode 'compare'; ignored in mode 'explore'.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 4
+          }
+        },
+        "required": [
+          "question"
+        ]
+      },
+      "_meta": {
+        "ui": {
+          "resourceUri": "ui://exploretree/main-v2"
+        }
+      }
+    },
+    {
+      "name": "expand_node",
+      "title": "Expand a research branch",
+      "description": "Expand a leaf node in an existing ExploreTree research session.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "node_id"
+        ]
+      },
+      "_meta": {
+        "ui": {
+          "resourceUri": "ui://exploretree/main-v2"
+        }
+      }
+    },
+    {
+      "name": "add_followup",
+      "title": "Add a research follow-up",
+      "description": "Add a focused follow-up question below a node in an existing ExploreTree research session.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "parent_id",
+          "question"
+        ]
+      },
+      "_meta": {
+        "ui": {
+          "resourceUri": "ui://exploretree/main-v2"
+        }
+      }
+    },
+    {
+      "name": "get_research_results",
+      "title": "Get research results",
+      "description": "Retrieve the current status and compact sourced findings for a previously started ExploreTree session. Call only after the user sends a later message asking about that exploration. Never call in the same conversation turn as explore_tree.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "description": "The session identifier returned by explore_tree in an earlier conversation turn."
+          }
+        },
+        "required": [
+          "session_id"
+        ]
+      }
+    },
+    {
+      "name": "get_tree_outline",
+      "title": "Get research tree outline",
+      "description": "Retrieve compact semantic metadata and stable node IDs for an existing ExploreTree session on a later user turn. Never call in the same conversation turn as explore_tree. Use this to resolve a branch mentioned by the user before expanding it, adding a follow-up, or requesting branch context.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ]
+      }
+    },
+    {
+      "name": "get_branch_context",
+      "title": "Get research branch context",
+      "description": "Retrieve compact sourced context for one or two branches in an existing ExploreTree session on a later user turn. Never call in the same conversation turn as explore_tree. Use two node IDs when the user asks to compare branches.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "node_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 2
+          }
+        },
+        "required": [
+          "session_id",
+          "node_ids"
+        ]
+      }
+    },
+    {
+      "name": "get_node_media",
+      "title": "Load node media",
+      "description": "Load image and video references for an ExploreTree node.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "node_id"
+        ]
+      },
+      "_meta": {
+        "ui": {
+          "resourceUri": "ui://exploretree/main-v2",
+          "visibility": [
+            "app"
+          ]
+        }
+      }
+    }
+  ]
+}

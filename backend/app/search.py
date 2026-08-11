@@ -2,6 +2,7 @@ import asyncio
 import random
 import re
 from dataclasses import dataclass
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 
@@ -9,6 +10,12 @@ from .config import settings
 
 # Transient HTTP statuses worth retrying (rate-limit + server-side hiccups).
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+_TRACKING_QUERY_KEYS = {
+    "fbclid",
+    "gclid",
+    "mc_cid",
+    "mc_eid",
+}
 
 
 @dataclass
@@ -19,6 +26,7 @@ class SearchResult:
     vertical: str = "web"
     thumbnail: str | None = None  # only news/video verticals carry one
     finance: dict | None = None  # structured stock data for finance vertical
+    published_at: str | None = None
 
     def to_dict(self) -> dict:
         d = {
@@ -26,12 +34,71 @@ class SearchResult:
             "url": self.url,
             "snippet": self.snippet,
             "vertical": self.vertical,
+            "domain": source_domain(self.url),
         }
+        if self.url:
+            d["canonicalUrl"] = _canonical_url(self.url)
+        if self.published_at:
+            d["publishedAt"] = self.published_at
         if self.thumbnail:
             d["thumbnail"] = self.thumbnail
         if self.finance:
             d["finance"] = self.finance
         return d
+
+
+def source_domain(url: str) -> str:
+    host = (urlsplit(url).hostname or "").casefold()
+    return host[4:] if host.startswith("www.") else host
+
+
+def _canonical_url(url: str) -> str:
+    parts = urlsplit(url)
+    host = (parts.hostname or "").casefold()
+    if host.startswith("www."):
+        host = host[4:]
+    netloc = host
+    if parts.port:
+        netloc = f"{host}:{parts.port}"
+    query = [
+        (key, value)
+        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+        if not key.casefold().startswith("utm_")
+        and key.casefold() not in _TRACKING_QUERY_KEYS
+    ]
+    path = parts.path.rstrip("/") or "/"
+    return urlunsplit(
+        (
+            parts.scheme.casefold(),
+            netloc,
+            path,
+            urlencode(sorted(query)),
+            "",
+        )
+    )
+
+
+def deduplicate_results(results: list[SearchResult]) -> list[SearchResult]:
+    """Keep the first result for each canonical URL."""
+    unique = []
+    seen = set()
+    for result in results:
+        key = _canonical_url(result.url) if result.url else result.title.casefold()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique.append(result)
+    return unique
+
+
+def _published_date(item: dict) -> str | None:
+    for key in ("datePublished", "publishedDate", "publicationDate"):
+        value = item.get(key)
+        if isinstance(value, str):
+            match = re.match(r"\d{4}-\d{2}-\d{2}", value.strip())
+            if match:
+                return match.group(0)
+    return None
 
 
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -96,6 +163,7 @@ async def search_web(query: str, count: int = 5) -> list[SearchResult]:
             url=r.get("url", ""),
             snippet=_to_snippet(r.get("content", "")),
             vertical="web",
+            published_at=_published_date(r),
         )
         for r in data.get("webResults", [])
     ]
@@ -122,6 +190,7 @@ async def search_news(query: str, count: int = 5) -> list[SearchResult]:
             snippet=_to_snippet(r.get("content", "")),
             vertical="news",
             thumbnail=_news_thumb(r),
+            published_at=_published_date(r),
         )
         for r in data.get("newsResults", [])
     ]
@@ -135,7 +204,7 @@ def _parse_finance(item: dict) -> tuple[str, dict | None]:
     so the frontend can render them in the finance section rather than generic sources.
     """
     parts = list(item.get("snippets") or [])
-    ctx = item.get("context") or {}
+    ctx = item.get("context") or item.get("data") or {}
     inst = ctx.get("instrument") or {}
 
     title = item.get("title", "")
@@ -160,8 +229,14 @@ def _parse_finance(item: dict) -> tuple[str, dict | None]:
         if price is not None:
             finance_data["price"] = price
 
-        change = inst.get("changeAmount") or pricing.get("priceChange")
-        change_pct = inst.get("changePercentage") or pricing.get("priceChangePercent")
+        change = inst.get("changeAmount")
+        if change is None:
+            change = pricing.get("priceChange")
+        change_pct = inst.get("changePercentage")
+        if change_pct is None:
+            change_pct = inst.get("changePercent")
+        if change_pct is None:
+            change_pct = pricing.get("priceChangePercent")
         if change is not None:
             finance_data["change"] = change
         if change_pct is not None:
@@ -189,12 +264,33 @@ def _parse_finance(item: dict) -> tuple[str, dict | None]:
         if lo:
             finance_data["low52w"] = lo
 
-        chart = ctx.get("chart") or {}
+        chart = ctx.get("chart") or inst.get("chart") or {}
         series = chart.get("series") or []
         if series:
-            finance_data["priceHistory"] = [
-                pt.get("price") for pt in series if pt and pt.get("price") is not None
-            ]
+            history = []
+            for point in series:
+                if isinstance(point, (int, float)):
+                    history.append(point)
+                    continue
+                if not isinstance(point, dict):
+                    continue
+                value = next(
+                    (
+                        point[key]
+                        for key in ("price", "close", "value", "y")
+                        if point.get(key) is not None
+                    ),
+                    None,
+                )
+                if value is not None:
+                    history.append(value)
+            if len(history) >= 3:
+                finance_data["priceHistory"] = history
+                finance_data["priceHistoryLabel"] = "Price history"
+
+        previous_close = inst.get("pricePreviousClose")
+        if previous_close is not None:
+            finance_data["previousClose"] = previous_close
 
         bits = []
         if price is not None:
@@ -296,6 +392,7 @@ async def search_videos_text(query: str, count: int = 3) -> list[SearchResult]:
                 snippet=_to_snippet(text),
                 vertical="videos",
                 thumbnail=r.get("thumbnailUrl"),
+                published_at=_published_date(r),
             )
         )
     return out

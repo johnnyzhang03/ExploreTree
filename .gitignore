@@ -17,3 +17,4 @@ dist/
 # Deploy artifacts
 deploy.zip
 deploy_pkg/
+m365-agent/build/

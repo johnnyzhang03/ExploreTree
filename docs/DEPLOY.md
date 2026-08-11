@@ -80,7 +80,9 @@ az webapp config set `
 
 These are the same variables as `backend/.env.example`. Fill in your real
 values. App Service injects them as environment variables, which
-`pydantic-settings` reads (it falls back to env vars when there's no `.env`).
+`pydantic-settings` reads. App Service settings are authoritative; a local
+`backend/.env` is only a development fallback and must not be included in the
+deployment package.
 
 ```powershell
 az webapp config appsettings set `
@@ -97,8 +99,15 @@ az webapp config appsettings set `
     OPENAI_BASE_URL="https://<your-resource>.services.ai.azure.com/openai/v1" `
     OPENAI_PLANNER_MODEL="<deployment-name>" `
     OPENAI_SYNTH_MODEL="<deployment-name>" `
+    PUBLIC_BASE_URL="https://$APP.azurewebsites.net" `
+    MCP_WIDGET_ORIGIN="<generated-widget-origin>" `
     SCM_DO_BUILD_DURING_DEPLOYMENT="true"
 ```
+
+Generate `MCP_WIDGET_ORIGIN` from the public MCP server URL with the
+[Widget Host URL Generator](https://aka.ms/mcpwidgeturlgenerator). Use the
+origin only, without a trailing slash. This allows the sandboxed Copilot widget
+to open its live WebSocket connection back to ExploreTree.
 
 > `SCM_DO_BUILD_DURING_DEPLOYMENT=true` makes Azure run `pip install -r
 > requirements.txt` on deploy (Oryx auto-detects the Python app).
@@ -123,6 +132,7 @@ az webapp config set `
 From the **repo root** in PowerShell, stage a clean deploy folder with:
 - `app/` and `requirements.txt` at the root (so Oryx finds requirements.txt)
 - `frontend/dist/` nested (matches `main.py`'s `../frontend/dist` lookup)
+- no `.env` file; deployed configuration comes from App Service settings
 
 ```powershell
 $stage = "deploy_pkg"
@@ -144,7 +154,10 @@ Compress-Archive -Path "$stage/*" -DestinationPath deploy.zip -Force
 Deploy:
 
 ```powershell
-az webapp deploy --name $APP --resource-group $RG --src-path deploy.zip --type zip
+az webapp deploy `
+  --name $APP --resource-group $RG `
+  --src-path deploy.zip --type zip `
+  --clean true --restart true
 ```
 
 ---
@@ -156,19 +169,55 @@ az webapp deploy --name $APP --resource-group $RG --src-path deploy.zip --type z
 curl https://$APP.azurewebsites.net/health        # -> {"status":"ok"}
 ```
 
+The remote MCP endpoint is
+`https://<APP>.azurewebsites.net/mcp`. A browser `GET` isn't a valid MCP
+request; use MCP Inspector to verify tool/resource discovery.
+
 Then open **https://\<APP\>.azurewebsites.net** in a browser:
 - The ExploreTree home page loads (frontend served by FastAPI).
 - Type a question and hit **Explore** — the tree/cards should start filling in.
   (This confirms the **WSS** WebSocket connected — the frontend derives
   `wss://<host>/ws` from the page origin automatically.)
 
-If the page loads but nothing happens on Explore, re-check **step 3**
-(WebSockets enabled) and the browser console for a failed `wss://` connection.
+Do not treat `/health` or MCP tool discovery alone as a complete deployment
+check. Start a small depth-1 exploration and confirm that at least one node
+streams into the widget.
+
+If the widget remains on **Planning…** with no nodes:
+
+1. Confirm `PUBLIC_BASE_URL` is set to the exact public HTTPS origin:
+   `https://<APP>.azurewebsites.net`.
+2. Inspect the `explore_tree` result with MCP Inspector and confirm `streamUrl`
+   starts with `wss://<APP>.azurewebsites.net/ws/sessions/`, not
+   `ws://localhost:8000`.
+3. Re-check **step 3** (WebSockets enabled) and the browser console for a failed
+   `wss://` connection.
+4. Ensure no `.env` was deployed. Environment variables intentionally take
+   precedence over a local `.env`, so App Service settings can be corrected
+   without rebuilding the package.
 
 Logs:
 ```powershell
 az webapp log tail --name $APP --resource-group $RG
 ```
+
+## Sideload the Microsoft 365 Copilot agent
+
+Install Microsoft 365 Agents Toolkit 6.12 or later and make sure custom app
+upload is enabled for the tenant. Build the sideload package:
+
+```powershell
+.\m365-agent\build-package.ps1 `
+  -McpServerUrl "https://$APP.azurewebsites.net" `
+  -PublisherEmail "publisher@example.com"
+```
+
+Upload `m365-agent/build/ExploreTree.dev.zip` as a custom app. The development
+package uses anonymous MCP authentication. Before production distribution,
+replace `auth.type: None` with Entra SSO or OAuth 2.1 and enforce the
+corresponding bearer token on `/mcp`. Treat the short-lived session URL as a
+capability token for the widget stream and bind each session to the authenticated
+user before enabling multi-user production access.
 
 ---
 
@@ -177,3 +226,5 @@ az webapp log tail --name $APP --resource-group $RG
 - **Frontend change:** `cd frontend && npm run build`, then repeat **step 6**.
 - **Backend change:** repeat **step 6** (no rebuild needed).
 - App Settings/secrets persist across deploys — only re-run **step 4** to change them.
+- After every redeploy, run the depth-1 exploration check from **step 7**; health
+  and MCP discovery do not verify the session WebSocket path.

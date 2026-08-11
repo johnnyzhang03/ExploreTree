@@ -1,11 +1,10 @@
 // Per-vertical badge metadata: short label + accent color.
 // Shared by the D3 tree (Tree.jsx) and the card view (CardView.jsx).
 export const VERTICALS = {
-  web: { label: "Web", color: "#1a73e8" },
-  news: { label: "News", color: "#d93025" },
-  finance: { label: "Finance", color: "#188038" },
-  places: { label: "Places", color: "#e8710a" },
-  videos: { label: "Videos", color: "#9334e6" },
+  web: { label: "Web", color: "#0f6cbd" },
+  news: { label: "News", color: "#c50f1f" },
+  finance: { label: "Finance", color: "#107c10" },
+  places: { label: "Places", color: "#ca5010" },
 };
 
 // Verticals that actually produced sources, else the planned set; filtered to known.

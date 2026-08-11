@@ -4,7 +4,10 @@
 
 **[▶ Live demo](https://exploretree-demo-a2hze7c2dbabg2bp.eastus2-01.azurewebsites.net)** — ask a question and watch a knowledge tree grow, as browsable cards or a live map.
 
-You ask a complex question; an LLM agent decomposes it, searches across multiple Bing verticals, synthesizes insights, and grows a knowledge tree in real time — while you watch it think and steer where it goes next.
+Ask a question in the standalone web app or Microsoft 365 Copilot. ExploreTree
+turns it into a structured research brief, decomposes it, searches across
+multiple Bing verticals, synthesizes sourced insights, and grows a knowledge
+tree in real time — while you watch it work and steer where it goes next.
 
 Unlike black-box research agents that only hand you a final report, **the tree *is* the reasoning process**: every node shows its insight, its sources, and how it was reached.
 
@@ -36,30 +39,35 @@ Unlike black-box research agents that only hand you a final report, **the tree *
 - **Live, animated visualization** — nodes appear and fill in over a WebSocket; D3 enter/update/exit transitions, pan/zoom with auto-fit, and on-canvas cues showing the agent *evaluating* and *expanding* nodes.
 - **User-controlled scope** — depth & breadth sliders on the home screen with a live Quick / Balanced / Deep "vibe" indicator.
 - **Human-in-the-loop steering** — click any node for a detail panel with its full insight and linked sources; **expand** a leaf on demand, or ask a **follow-up** question to grow a custom branch.
+- **Aligned comparison mode** — named alternatives are researched against the
+  same criteria, with uncovered option/criterion cells reported as evidence
+  gaps instead of being filled from model knowledge.
+- **Native Microsoft 365 Copilot integration** — a declarative agent calls the
+  remote MCP server, renders the same interactive tree as an MCP App, and can
+  use compact sourced artifacts on later conversation turns.
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────┐
-│            Frontend — React + D3  (Vite)              │
-│   Card drill-down · tree map · side panel · sliders   │
-└───────────────────────────┬──────────────────────────┘
-                            │  WebSocket  (live, bidirectional)
-┌───────────────────────────▼──────────────────────────┐
-│              Backend — FastAPI  (Python)              │
-│                                                       │
-│   Planner ─→ Tool router ─→ Searcher ─→ Synthesizer   │
-│      │  (decompose)  (per-node verticals)   │         │
-│      └──────────── Reflection loop ─────────┘         │
-│            (pick next nodes · grow deeper)            │
-└───────────────────────────┬──────────────────────────┘
-                            │
-┌───────────────────────────▼──────────────────────────┐
-│   Microsoft AI Search   ·   Azure AI Foundry (LLM)    │
-│   web · news · finance · places · images · videos    GPT │
-└──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ Standalone browser        Microsoft 365 Copilot              │
+│ React + D3 UI             Declarative agent + MCP App host    │
+└───────────────┬──────────────────────────┬───────────────────┘
+                │ WebSocket                │ Streamable HTTP MCP
+┌───────────────▼──────────────────────────▼───────────────────┐
+│                  FastAPI application                         │
+│  Web UI · /mcp tools/resources · session WebSockets          │
+│                                                              │
+│  Planner → vertical search → synthesis → reflection loop     │
+│                    server-side tree/session state             │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+┌──────────────────────────────▼───────────────────────────────┐
+│ Microsoft AI Search · Azure AI Foundry                       │
+│ web · news · finance · places · images · videos · LLM        │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 Tree state lives **server-side** and persists for the session, so the agent can act on existing nodes (expand / follow-up). Every mutation emits a `node_added` / `node_updated` / `node_state` event; the frontend is a thin renderer of that stream.
@@ -68,20 +76,57 @@ Tree state lives **server-side** and persists for the session, so the agent can 
 
 ```
 backend/app/
-  main.py     FastAPI app + WebSocket handler (owns the per-session tree)
-  agent.py    orchestration: explore(), reflection loop, expand/follow-up
-  llm.py      planner · synthesizer · reflection (Azure AI Foundry, Responses API)
-  search.py   per-vertical adapters (web/news/finance/places) + result shaping
-  tree.py     server-side Tree / Node state
-  config.py   settings (pydantic-settings, reads backend/.env)
+  main.py        FastAPI app, WebSockets, MCP route, and static frontend
+  mcp_server.py  MCP tools + self-contained MCP App resource
+  agent.py       orchestration: explore(), reflection loop, expand/follow-up
+  llm.py         planner · synthesizer · reflection (Azure AI Foundry)
+  search.py      vertical adapters and result shaping
+  sessions.py    asynchronous research sessions and artifacts
+  tree.py        server-side Tree / Node state
 frontend/src/
   App.jsx       state, WebSocket wiring, search bar, scope sliders, view toggle
+  McpBridge.jsx MCP Apps host bridge (tool results/calls, theme, fullscreen)
   CardView.jsx  Pinterest-style card drill-down + breadcrumb navigation
   Tree.jsx      D3 tree "map" rendering, animations, pan/zoom, click handling
   verticals.js  shared per-vertical labels/colors (used by cards + tree)
   styles.css    styling
 docs/         proposal.md · plan.md · DEPLOY.md
+m365-agent/
+  appPackage/      Teams manifest, declarative agent, plugin, instructions
+  build-package.ps1 development sideload-package builder
 ```
+
+### Microsoft 365 Copilot MCP App
+
+ExploreTree exposes a remote Streamable HTTP MCP server at `/mcp`. Its
+declarative agent treats each valid new information request as an ExploreTree
+request rather than answering from model knowledge. The first turn calls
+`explore_tree` exactly once and returns immediately with an empty running
+session; findings stream into the `ui://exploretree/main-v2` MCP App over a
+session-scoped WebSocket.
+
+| MCP tool | Purpose |
+|---|---|
+| `explore_tree` | Start an `explore` or aligned `compare` research session |
+| `get_research_results` | Return compact sourced findings on a later turn |
+| `get_tree_outline` | Resolve stable node IDs without copying the full tree |
+| `get_branch_context` | Return sourced context for one or two branches |
+| `expand_node` | Research an existing leaf more deeply |
+| `add_followup` | Add a focused question beneath an existing node |
+| `get_node_media` | Load node media for the MCP App UI |
+
+The MCP contract separates responsibilities between the host and ExploreTree.
+Microsoft 365 Copilot turns the conversation into a research brief containing
+the objective, audience, scope, constraints, freshness, desired output, and
+optional comparison choices. When research completes, the widget updates model
+context without forcing an unsolicited Copilot reply. On a later user turn,
+Copilot retrieves the compact artifact, cites the supplied evidence, and labels
+missing or conflicting evidence instead of filling gaps from prior knowledge.
+
+The production frontend build is a self-contained HTML document so the MCP
+server can return it as the `ui://exploretree/main-v2` resource with MIME type
+`text/html;profile=mcp-app`. The standalone web application remains available
+at `/`.
 
 ---
 
@@ -113,6 +158,20 @@ npm run dev
 
 Open **http://localhost:5173**, set depth/breadth, type a question, hit **Explore**. Browse the results as **Cards** or switch to the **Map** view; click any card/node to inspect it, drill in, expand it, or ask a follow-up.
 
+To exercise the MCP App resource locally, build the frontend first and restart
+the backend:
+
+```bash
+cd frontend
+npm run build
+cd ../backend
+.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+```
+
+The MCP endpoint is then `http://localhost:8000/mcp`. Microsoft 365 Copilot
+requires a publicly reachable HTTPS deployment; localhost is suitable only for
+the standalone app and local MCP clients.
+
 ---
 
 ## Configuration
@@ -127,6 +186,8 @@ Settings are read from `backend/.env` (gitignored; see [backend/.env.example](ba
 | `OPENAI_API_KEY` | Azure AI Foundry key |
 | `OPENAI_BASE_URL` | Foundry `/openai/v1` base URL |
 | `OPENAI_PLANNER_MODEL` / `OPENAI_SYNTH_MODEL` | Foundry deployment names for planning vs. synthesis |
+| `PUBLIC_BASE_URL` | Public HTTPS origin used in MCP widget WebSocket URLs |
+| `MCP_WIDGET_ORIGIN` | Hashed Microsoft widget origin allowed by CORS/WebSocket validation |
 
 Tuning knobs (in [backend/app/config.py](backend/app/config.py)): `max_depth`, `expand_per_level` (defaults; overridable per-request via the UI sliders), `openai_timeout`, `openai_planner_effort`.
 
@@ -137,3 +198,30 @@ Tuning knobs (in [backend/app/config.py](backend/app/config.py)): `max_depth`, `
 ## Deploy
 
 The app runs as a **single service** — FastAPI serves the built frontend and the WebSocket from one origin. See **[docs/DEPLOY.md](docs/DEPLOY.md)** for a step-by-step Azure App Service guide (build the frontend, set secrets as app settings, enable WebSockets, deploy).
+
+### Add to Microsoft 365 Copilot
+
+After deploying to a public HTTPS origin, install Microsoft 365 Agents Toolkit
+6.12 or later and ensure custom app upload is enabled for your tenant. Build a
+development package from the repository root:
+
+```powershell
+.\m365-agent\build-package.ps1 `
+  -McpServerUrl "https://<your-app>.azurewebsites.net" `
+  -PublisherEmail "publisher@example.com"
+```
+
+Upload `m365-agent\build\ExploreTree.dev.zip` as a custom app in Microsoft 365.
+The builder injects the MCP origin, a Teams app ID, the development name suffix,
+and publisher email into the package. The included development manifest uses
+anonymous MCP authentication; add Entra SSO or OAuth 2.1 and bind research
+sessions to authenticated users before production distribution.
+
+### Tests
+
+```powershell
+cd backend
+.venv\Scripts\python.exe -m unittest discover -s tests
+cd ..\frontend
+npm run build
+```

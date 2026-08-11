@@ -13,6 +13,8 @@ on:
 
 env:
   AZURE_WEBAPP_NAME: exploretree-demo
+  PUBLIC_BASE_URL: https://exploretree-demo-a2hze7c2dbabg2bp.eastus2-01.azurewebsites.net
+  MCP_WIDGET_ORIGIN: https://1056851e4c3c58250520d82a50fb3a09.widget-renderer.usercontent.microsoft
 
 jobs:
   build-and-deploy:
@@ -34,11 +36,34 @@ jobs:
           npm run build
 
       - name: Stage deploy package
+        env:
+          BING_SEARCH_KEY: ${{ secrets.BING_SEARCH_KEY }}
+          BING_SEARCH_ENDPOINT: ${{ secrets.BING_SEARCH_ENDPOINT }}
+          BING_NEWS_ENDPOINT: ${{ secrets.BING_NEWS_ENDPOINT }}
+          BING_FINANCE_ENDPOINT: ${{ secrets.BING_FINANCE_ENDPOINT }}
+          BING_PLACES_ENDPOINT: ${{ secrets.BING_PLACES_ENDPOINT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_PLANNER_MODEL: ${{ secrets.OPENAI_PLANNER_MODEL }}
+          OPENAI_SYNTH_MODEL: ${{ secrets.OPENAI_SYNTH_MODEL }}
         run: |
           mkdir -p deploy_pkg/frontend
           cp -r backend/app deploy_pkg/app
           cp backend/requirements.txt deploy_pkg/requirements.txt
           cp -r frontend/dist deploy_pkg/frontend/dist
+          {
+            printf 'PUBLIC_BASE_URL=%s\n' "$PUBLIC_BASE_URL"
+            printf 'MCP_WIDGET_ORIGIN=%s\n' "$MCP_WIDGET_ORIGIN"
+            printf 'BING_SEARCH_KEY=%s\n' "$BING_SEARCH_KEY"
+            printf 'BING_SEARCH_ENDPOINT=%s\n' "$BING_SEARCH_ENDPOINT"
+            printf 'BING_NEWS_ENDPOINT=%s\n' "$BING_NEWS_ENDPOINT"
+            printf 'BING_FINANCE_ENDPOINT=%s\n' "$BING_FINANCE_ENDPOINT"
+            printf 'BING_PLACES_ENDPOINT=%s\n' "$BING_PLACES_ENDPOINT"
+            printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+            printf 'OPENAI_BASE_URL=%s\n' "$OPENAI_BASE_URL"
+            printf 'OPENAI_PLANNER_MODEL=%s\n' "$OPENAI_PLANNER_MODEL"
+            printf 'OPENAI_SYNTH_MODEL=%s\n' "$OPENAI_SYNTH_MODEL"
+          } > deploy_pkg/.env
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
@@ -46,3 +71,48 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: deploy_pkg
+
+      - name: Restart Python worker
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          import urllib.request
+          import xml.etree.ElementTree as ET
+
+          root = ET.fromstring(os.environ["PUBLISH_PROFILE"])
+          profile = next(
+              item
+              for item in root.findall("publishProfile")
+              if item.attrib.get("publishMethod") == "MSDeploy"
+          )
+          host = profile.attrib["publishUrl"].split(":", 1)[0]
+          credentials = (
+              f'{profile.attrib["userName"]}:{profile.attrib["userPWD"]}'
+          ).encode()
+          headers = {
+              "Authorization": "Basic "
+              + base64.b64encode(credentials).decode(),
+              "Content-Type": "application/json",
+          }
+          payload = json.dumps(
+              {
+                  "command": "touch /home/site/config/restartTrigger.txt",
+                  "dir": "/home/site/wwwroot",
+              }
+          ).encode()
+          request = urllib.request.Request(
+              f"https://{host}/api/command",
+              data=payload,
+              headers=headers,
+              method="POST",
+          )
+          with urllib.request.urlopen(request) as response:
+              result = json.load(response)
+          if result.get("ExitCode") != 0:
+              raise RuntimeError(result.get("Error") or "Restart trigger failed")
+          print("Triggered App Service Linux worker restart")
+          PY

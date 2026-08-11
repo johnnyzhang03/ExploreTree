@@ -27,6 +27,8 @@ Based on Microsoft's [User experience guidelines for MCP apps in declarative age
 - Surface evidence gaps prominently but calmly.
 - Present summaries and findings in reusable Fluent insight surfaces with a
   restrained accent rail, supporting icon, and source/domain metadata.
+- Add an Evidence Lens that distinguishes visible-card totals from unique
+  evidence and visualizes source mix, domain diversity, dates, and gaps.
 - Use compact tinted insight wells in cards and a stronger "Key insight"
   treatment in the detail panel without relying on decorative text colors.
 

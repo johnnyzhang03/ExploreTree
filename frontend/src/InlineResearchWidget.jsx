@@ -1,4 +1,14 @@
 import React from "react";
+import {
+  Badge,
+  Button,
+  Card,
+  Caption1,
+  ProgressBar,
+  Subtitle1,
+  Subtitle2,
+} from "@fluentui/react-components";
+import { ArrowExpand20Regular } from "@fluentui/react-icons";
 
 const capitalize = (value) =>
   value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
@@ -85,28 +95,41 @@ export default function InlineResearchWidget({
       : 0;
 
   return (
-    <section className="mcp-inline-card" aria-labelledby="inline-research-title">
+    <Card
+      as="section"
+      appearance="outline"
+      className="mcp-inline-card"
+      aria-labelledby="inline-research-title"
+    >
       <header className="mcp-inline-header">
         <span className="mcp-inline-logo" aria-hidden="true">
           ET
         </span>
         <div>
-          <div className="mcp-inline-agent">ExploreTree</div>
-          <div className="mcp-inline-kicker">Interactive research</div>
+          <Subtitle2 className="mcp-inline-agent">ExploreTree</Subtitle2>
+          <Caption1 className="mcp-inline-kicker">
+            Interactive research
+          </Caption1>
         </div>
         {comparison && (
-          <span
+          <Badge
+            appearance="tint"
+            color="informative"
             className="mcp-inline-mode"
             title={`Comparing ${comparison.options.join(", ")}`}
           >
             Comparison
-          </span>
+          </Badge>
         )}
       </header>
 
-      <h2 id="inline-research-title" className="mcp-inline-question">
+      <Subtitle1
+        as="h2"
+        id="inline-research-title"
+        className="mcp-inline-question"
+      >
         {question || "Preparing your research workspace…"}
-      </h2>
+      </Subtitle1>
 
       <div
         className={`mcp-inline-state mcp-inline-state--${state.tone}`}
@@ -120,22 +143,17 @@ export default function InlineResearchWidget({
         </span>
       </div>
 
-      <div
-        className={`mcp-inline-progress ${
-          researchNodes.length ? "" : "is-indeterminate"
-        }`}
-        role="progressbar"
+      <ProgressBar
+        className="mcp-inline-progress"
+        value={researchNodes.length ? progress / 100 : undefined}
         aria-label="Research progress"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        aria-valuenow={researchNodes.length ? progress : undefined}
-      >
-        <span style={{ width: `${progress}%` }} />
-      </div>
+      />
 
       {visibleBranches.length > 0 && (
         <div className="mcp-inline-branches">
-          <div className="mcp-inline-section-label">Research branches</div>
+          <Caption1 className="mcp-inline-section-label">
+            Research branches
+          </Caption1>
           <ul>
             {visibleBranches.map((branch) => (
               <li key={branch.id}>
@@ -181,11 +199,16 @@ export default function InlineResearchWidget({
 
       {canExpand && (
         <footer className="mcp-inline-actions">
-          <button type="button" onClick={onExpand}>
+          <Button
+            type="button"
+            appearance="primary"
+            icon={<ArrowExpand20Regular />}
+            onClick={onExpand}
+          >
             Open workspace
-          </button>
+          </Button>
         </footer>
       )}
-    </section>
+    </Card>
   );
 }

@@ -1,8 +1,20 @@
 import React, { useEffect, useRef, useState } from "react";
+import {
+  Badge,
+  Button,
+  Divider,
+  Input,
+  Label,
+  Slider,
+  ToggleButton,
+} from "@fluentui/react-components";
+import { Dismiss20Regular, Search20Regular } from "@fluentui/react-icons";
 import Tree from "./Tree.jsx";
 import CardView from "./CardView.jsx";
 import InlineResearchWidget from "./InlineResearchWidget.jsx";
+import { EvidenceSummary, InsightSurface } from "./InsightSurface.jsx";
 import { useMcpBridge } from "./McpBridge.jsx";
+import { VERTICALS, nodeVerticals } from "./verticals.js";
 
 // Same-origin in production (FastAPI serves this build); falls back to the
 // dev-server origin locally, where Vite proxies /ws to the backend.
@@ -157,33 +169,47 @@ function vibeOf(depth, breadth) {
 
 function ScopeControls({ depth, breadth, setDepth, setBreadth }) {
   const vibe = vibeOf(depth, breadth);
+  const vibeColor =
+    vibe === "Quick" ? "success" : vibe === "Deep" ? "warning" : "informative";
   return (
     <div className="scope" aria-label="Research scope">
       <div className="scope-row">
-        <label htmlFor="research-depth">Depth</label>
-        <input
+        <Label htmlFor="research-depth" size="small">
+          Depth
+        </Label>
+        <Slider
           id="research-depth"
-          type="range"
           min="1"
           max="4"
           value={depth}
-          onChange={(e) => setDepth(Number(e.target.value))}
+          onChange={(_, data) => setDepth(data.value)}
         />
-        <span className="scope-val">{depth}</span>
+        <Badge appearance="outline" className="scope-val">
+          {depth}
+        </Badge>
       </div>
       <div className="scope-row">
-        <label htmlFor="research-breadth">Breadth</label>
-        <input
+        <Label htmlFor="research-breadth" size="small">
+          Breadth
+        </Label>
+        <Slider
           id="research-breadth"
-          type="range"
           min="1"
           max="4"
           value={breadth}
-          onChange={(e) => setBreadth(Number(e.target.value))}
+          onChange={(_, data) => setBreadth(data.value)}
         />
-        <span className="scope-val">{breadth}</span>
+        <Badge appearance="outline" className="scope-val">
+          {breadth}
+        </Badge>
       </div>
-      <div className={`scope-vibe vibe-${vibe.toLowerCase()}`}>{vibe}</div>
+      <Badge
+        appearance="tint"
+        color={vibeColor}
+        className={`scope-vibe vibe-${vibe.toLowerCase()}`}
+      >
+        {vibe}
+      </Badge>
     </div>
   );
 }
@@ -191,23 +217,26 @@ function ScopeControls({ depth, breadth, setDepth, setBreadth }) {
 function SearchBar({ autoFocus, question, setQuestion, ask, disabled }) {
   return (
     <div className="search" role="search">
-      <svg className="search-icon" viewBox="0 0 24 24" width="20" height="20">
-        <path
-          fill="currentColor"
-          d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0A4.5 4.5 0 1 1 14 9.5 4.49 4.49 0 0 1 9.5 14Z"
-        />
-      </svg>
-      <input
+      <Input
+        className="search-input"
+        contentBefore={<Search20Regular />}
+        size="large"
         autoFocus={autoFocus}
         value={question}
-        onChange={(e) => setQuestion(e.target.value)}
+        onChange={(_, data) => setQuestion(data.value)}
         onKeyDown={(e) => e.key === "Enter" && ask()}
         placeholder="Ask a complex question…"
         aria-label="Research question"
       />
-      <button type="button" onClick={ask} disabled={disabled}>
+      <Button
+        type="button"
+        appearance="primary"
+        size="large"
+        onClick={ask}
+        disabled={disabled}
+      >
         Explore
-      </button>
+      </Button>
     </div>
   );
 }
@@ -222,21 +251,77 @@ function formatNumber(n) {
 
 function Sparkline({ data, width = 80, height = 24, color = "#107c10" }) {
   if (!data || data.length < 2) return null;
-  const values = data.filter((v) => v != null);
+  const values = data.map(Number).filter(Number.isFinite);
   if (values.length < 2) return null;
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const range = max - min || 1;
+  const range = max - min;
+  const padding = 2;
   const points = values
     .map((v, i) => {
       const x = (i / (values.length - 1)) * width;
-      const y = height - ((v - min) / range) * (height - 2) - 1;
+      const y =
+        range === 0
+          ? height / 2
+          : height -
+            padding -
+            ((v - min) / range) * (height - padding * 2);
       return `${x},${y}`;
     })
     .join(" ");
   return (
     <svg className="sparkline" width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
       <polyline fill="none" stroke={color} strokeWidth="1.5" points={points} />
+    </svg>
+  );
+}
+
+function PriceChangeLine({
+  previousClose,
+  currentPrice,
+  width = 80,
+  height = 24,
+  color = "#107c10",
+}) {
+  const previous = Number(previousClose);
+  const current = Number(currentPrice);
+  if (!Number.isFinite(previous) || !Number.isFinite(current) || previous === 0) {
+    return null;
+  }
+
+  const changePercent = ((current - previous) / previous) * 100;
+  const scaleLimit = 10;
+  const normalized = Math.max(
+    -1,
+    Math.min(1, changePercent / scaleLimit)
+  );
+  const padding = 2;
+  const midpoint = height / 2;
+  const endY = midpoint - normalized * (midpoint - padding);
+
+  return (
+    <svg
+      className="sparkline"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      aria-label={`Previous close to current price: ${changePercent.toFixed(2)}%`}
+      role="img"
+    >
+      <line
+        x1={padding}
+        x2={width - padding}
+        y1={midpoint}
+        y2={midpoint}
+        stroke="var(--color-border-secondary)"
+        strokeWidth="1"
+      />
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        points={`${padding},${midpoint} ${width - padding},${endY}`}
+      />
     </svg>
   );
 }
@@ -258,7 +343,13 @@ function FinanceCard({ data, openExternal }) {
           openExternal(url);
         }}
       >
-        <span className="src-badge src-finance">Finance</span>
+        <Badge
+          size="small"
+          appearance="filled"
+          className="src-badge src-finance"
+        >
+          Finance
+        </Badge>
         <span className="finance-link-title">{data.title || data.url}</span>
       </a>
     );
@@ -268,7 +359,11 @@ function FinanceCard({ data, openExternal }) {
 
   const changeColor = (data.change ?? 0) >= 0 ? "#107c10" : "#c50f1f";
   const changeSign = (data.change ?? 0) >= 0 ? "+" : "";
-  const hasHistory = data.priceHistory && data.priceHistory.length >= 2;
+  const hasHistory = data.priceHistory && data.priceHistory.length >= 3;
+  const hasPriceChange =
+    !hasHistory &&
+    Number.isFinite(Number(data.previousClose)) &&
+    Number.isFinite(Number(data.price));
   const isEtf = data.type === "etf";
   const isIndex = data.type === "index";
 
@@ -315,6 +410,17 @@ function FinanceCard({ data, openExternal }) {
             <Sparkline data={data.priceHistory} width={100} height={28} color={changeColor} />
           </span>
         )}
+        {hasPriceChange && (
+          <span title="Previous close to current price">
+            <PriceChangeLine
+              previousClose={data.previousClose}
+              currentPrice={data.price}
+              width={100}
+              height={28}
+              color={changeColor}
+            />
+          </span>
+        )}
       </div>
       <div className="finance-metrics">
         {data.marketCap && (
@@ -358,6 +464,15 @@ function FinanceCard({ data, openExternal }) {
   );
 }
 
+function PanelSectionHeading({ children }) {
+  return (
+    <>
+      <Divider className="panel-section-divider" />
+      <div className="panel-section-label">{children}</div>
+    </>
+  );
+}
+
 function SidePanel({
   node,
   media,
@@ -377,6 +492,8 @@ function SidePanel({
   // videos render in their own thumbnail section below; finance has its own card
   const sources = allSources.filter((s) => !s.finance && s.vertical !== "videos");
   const coverage = node.evidenceCoverage;
+  const primaryVertical = nodeVerticals(node)[0];
+  const insightAccent = VERTICALS[primaryVertical]?.color || "#0f6cbd";
   const canExpand = isLeaf && node.status === "done";
   const images = media?.images || [];
   const videos = media?.videos || [];
@@ -401,72 +518,58 @@ function SidePanel({
           )}
           {capitalize(node.label)}
         </span>
-        <button
+        <Button
           type="button"
+          appearance="subtle"
+          icon={<Dismiss20Regular />}
           className="panel-close"
           onClick={onClose}
           aria-label="Close details"
-        >
-          ×
-        </button>
+        />
       </div>
       <div className="panel-body">
-        <div className="panel-section-label">Insight</div>
-        <p className="panel-insight">
+        <InsightSurface
+          label="Key insight"
+          accent={insightAccent}
+          className="panel-insight-surface"
+          footer={
+            coverage && node.parentId && node.status === "done" ? (
+              <EvidenceSummary coverage={coverage} />
+            ) : null
+          }
+        >
           {node.status === "done"
             ? node.insight || "No insight generated."
             : node.status === "searching"
             ? "searching…"
             : "pending…"}
-        </p>
-
-        {coverage && node.parentId && node.status === "done" && (
-          <div
-            className="panel-evidence-summary"
-            title="Includes web, news, finance, places, and video evidence."
-          >
-            {coverage.gaps?.noEvidence && (
-              <span className="coverage-gap">
-                No supporting search evidence was found.
-              </span>
-            )}
-            {!coverage.gaps?.noEvidence && (
-              <span>
-                {coverage.sourceCount} source
-                {coverage.sourceCount === 1 ? "" : "s"} from{" "}
-                {coverage.domainCount} domain
-                {coverage.domainCount === 1 ? "" : "s"}
-                {coverage.gaps?.singleDomain && (
-                  <span className="coverage-caution"> · limited diversity</span>
-                )}
-              </span>
-            )}
-          </div>
-        )}
+        </InsightSurface>
 
         {showDiscuss && (
-          <button
+          <Button
             type="button"
+            appearance="secondary"
             className="panel-discuss"
             onClick={() => onDiscuss(node.id)}
           >
             Discuss in Copilot
-          </button>
+          </Button>
         )}
 
         {canExpand && (
-          <button
+          <Button
             type="button"
+            appearance="primary"
             className="panel-expand"
             onClick={() => onExpand(node.id)}
           >
             Expand this branch
-          </button>
+          </Button>
         )}
 
         {financeData.length > 0 && (
           <>
-            <div className="panel-section-label">Finance</div>
+            <PanelSectionHeading>Finance</PanelSectionHeading>
             <div className="finance-cards">
               {financeData.map((fd, i) => (
                 <FinanceCard
@@ -479,14 +582,18 @@ function SidePanel({
           </>
         )}
 
-        <div className="panel-section-label">Sources</div>
+        <PanelSectionHeading>Sources</PanelSectionHeading>
         {sources.length ? (
           <ul className="panel-sources">
             {sources.map((s, i) => (
               <li key={i}>
-                <span className={`src-badge src-${s.vertical || "web"}`}>
+                <Badge
+                  size="small"
+                  appearance="filled"
+                  className={`src-badge src-${s.vertical || "web"}`}
+                >
                   {s.vertical || "web"}
-                </span>
+                </Badge>
                 <a
                   href={safeUrl(s.url)}
                   target="_blank"
@@ -505,7 +612,7 @@ function SidePanel({
           <p className="panel-empty">No sources yet.</p>
         )}
 
-        <div className="panel-section-label">Images</div>
+        <PanelSectionHeading>Images</PanelSectionHeading>
         {media ? (
           images.length ? (
             <div className="media-grid">
@@ -535,7 +642,7 @@ function SidePanel({
 
         {media && videos.length > 0 && (
           <>
-            <div className="panel-section-label">Videos</div>
+            <PanelSectionHeading>Videos</PanelSectionHeading>
             <div className="media-videos">
               {videos.slice(0, 4).map((v, i) => (
                 <a
@@ -562,21 +669,22 @@ function SidePanel({
 
         {showFollowup && (
           <>
-            <div className="panel-section-label">Ask a follow-up</div>
+            <PanelSectionHeading>Ask a follow-up</PanelSectionHeading>
             <div className="panel-followup">
-              <input
+              <Input
                 value={followup}
-                onChange={(e) => setFollowup(e.target.value)}
+                onChange={(_, data) => setFollowup(data.value)}
                 onKeyDown={(e) => e.key === "Enter" && submitFollowup()}
                 placeholder="Ask something about this node…"
               />
-              <button
+              <Button
                 type="button"
+                appearance="primary"
                 onClick={submitFollowup}
                 disabled={!followup.trim()}
               >
                 Ask
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -639,8 +747,14 @@ export default function App() {
     setQuestion(toolData.question || "");
     setResearchBrief(toolData.brief || { question: toolData.question || "" });
     setStarted(true);
-    setStatus("exploring");
     if (isNewSession) {
+      setStatus(
+        toolData.status === "completed"
+          ? "Done"
+          : toolData.status === "failed"
+          ? "Error"
+          : "exploring"
+      );
       nodesRef.current = incomingNodes;
       setNodes(incomingNodes);
       setNodeStates({});
@@ -659,10 +773,9 @@ export default function App() {
     if (!url) return;
     const ws = new WebSocket(url);
     wsRef.current = ws;
-    ws.onopen = () =>
-      setStatus((current) =>
-        embedded && current === "exploring" ? current : "Ready"
-      );
+    ws.onopen = () => {
+      if (!embedded) setStatus("Ready");
+    };
     ws.onclose = () => setStatus("disconnected");
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
@@ -912,6 +1025,13 @@ export default function App() {
 
   const expandedHeight =
     containerHeight && containerHeight >= 720 ? containerHeight : 1200;
+  const normalizedStatus = status.toLowerCase();
+  const statusIsActive =
+    normalizedStatus === "exploring" ||
+    normalizedStatus.includes("planning") ||
+    normalizedStatus.includes("working") ||
+    normalizedStatus.includes("sharing");
+  const statusLabel = normalizedStatus === "exploring" ? "Researching" : status;
 
   return (
     <div
@@ -937,33 +1057,51 @@ export default function App() {
             disabled={status === "disconnected"}
           />
         )}
-        <div className="view-toggle" aria-label="Research view">
-          <button
-            type="button"
-            className={view === "cards" ? "active" : ""}
+        <div className="view-toggle" role="group" aria-label="Research view">
+          <ToggleButton
+            size="medium"
+            appearance={view === "cards" ? "primary" : "subtle"}
+            checked={view === "cards"}
             onClick={() => setView("cards")}
-            aria-pressed={view === "cards"}
           >
             Cards
-          </button>
-          <button
-            type="button"
-            className={view === "map" ? "active" : ""}
+          </ToggleButton>
+          <ToggleButton
+            size="medium"
+            appearance={view === "map" ? "primary" : "subtle"}
+            checked={view === "map"}
             onClick={() => setView("map")}
-            aria-pressed={view === "map"}
           >
             Map
-          </button>
+          </ToggleButton>
         </div>
         {comparison && (
-          <span
+          <Badge
+            appearance="tint"
+            color="informative"
             className="mode-chip"
             title={`Comparing ${comparison.options.join(", ")} against ${comparison.criteria.join(", ")}`}
           >
             Comparing {comparison.options.length} options
-          </span>
+          </Badge>
         )}
-        <span className="status">{status}</span>
+        <Badge
+          appearance="tint"
+          size="large"
+          icon={<span className="status-dot" aria-hidden="true" />}
+          color={
+            status === "Done"
+              ? "success"
+              : status === "disconnected" ||
+                normalizedStatus.includes("error") ||
+                normalizedStatus.includes("fail")
+              ? "danger"
+              : "informative"
+          }
+          className={`status ${statusIsActive ? "status--active" : ""}`}
+        >
+          {statusLabel}
+        </Badge>
       </div>
       <div className="canvas">
         {view === "map" ? (

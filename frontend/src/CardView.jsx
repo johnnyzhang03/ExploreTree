@@ -1,23 +1,15 @@
 import React from "react";
+import {
+  Badge,
+  Button,
+  Card as FluentCard,
+  CardPreview,
+  Spinner,
+} from "@fluentui/react-components";
 import { VERTICALS, nodeVerticals } from "./verticals.js";
+import { EvidenceSummary, InsightSurface } from "./InsightSurface.jsx";
 
 const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-
-function CoverageLine({ coverage }) {
-  if (!coverage) return null;
-  if (coverage.gaps?.noEvidence) {
-    return <div className="card-coverage card-coverage--gap">Evidence gap</div>;
-  }
-  return (
-    <div
-      className="card-coverage"
-      title="Includes web, news, finance, places, and video evidence."
-    >
-      {coverage.sourceCount} source{coverage.sourceCount === 1 ? "" : "s"} from{" "}
-      {coverage.domainCount} domain{coverage.domainCount === 1 ? "" : "s"}
-    </div>
-  );
-}
 
 function Breadcrumb({ trail, onCrumb }) {
   return (
@@ -29,9 +21,15 @@ function Breadcrumb({ trail, onCrumb }) {
             {last ? (
               <span className="crumb crumb-current">{capitalize(node.label)}</span>
             ) : (
-              <button className="crumb" onClick={() => onCrumb(i)}>
+              <Button
+                type="button"
+                appearance="transparent"
+                size="small"
+                className="crumb"
+                onClick={() => onCrumb(i)}
+              >
                 {capitalize(node.label)}
-              </button>
+              </Button>
             )}
             {!last && <span className="crumb-sep">›</span>}
           </span>
@@ -41,7 +39,7 @@ function Breadcrumb({ trail, onCrumb }) {
   );
 }
 
-function Card({ node, childCount, childrenGrowing, onOpen, onDrill }) {
+function BranchCard({ node, childCount, childrenGrowing, onOpen, onDrill }) {
   // node.cardImage ships with the node: null/undefined = still loading (shimmer);
   // {} = searched, no image (colored placeholder); {thumbnail} = the cover image.
   const ci = node.cardImage;
@@ -55,22 +53,37 @@ function Card({ node, childCount, childrenGrowing, onOpen, onDrill }) {
   const drillable = (isLeaf ? node.status === "done" : true) && !childrenGrowing;
 
   return (
-    <div className={`card ${node.status}`} onClick={() => onOpen(node.id)}>
-      {imgLoading ? (
-        <div className="card-image sk-shimmer" />
-      ) : img ? (
-        <div className="card-image">
-          <img src={img} alt="" loading="lazy" />
-        </div>
-      ) : (
-        <div className="card-image card-image--placeholder" style={{ background: accent }}>
-          <span className="card-image-initial">{capitalize(node.label).charAt(0)}</span>
-        </div>
-      )}
-      <div className="card-body">
-        {node.option && node.criterion && (
-          <div className="card-option">{node.option}</div>
+    <FluentCard
+      appearance="outline"
+      className={`card ${node.status}`}
+      onClick={() => onOpen(node.id)}
+    >
+      <CardPreview>
+        {imgLoading ? (
+          <div className="card-image sk-shimmer" />
+        ) : img ? (
+          <div className="card-image">
+            <img src={img} alt="" loading="lazy" />
+          </div>
+        ) : (
+          <div
+            className="card-image card-image--placeholder"
+            style={{ background: accent }}
+          >
+            <span className="card-image-initial">
+              {capitalize(node.label).charAt(0)}
+            </span>
+          </div>
         )}
+      </CardPreview>
+      <div className="card-body">
+        <div
+          className={`card-option ${
+            node.option && node.criterion ? "" : "card-option--empty"
+          }`}
+        >
+          {node.option || "\u00a0"}
+        </div>
         <div className="card-title">{capitalize(node.label)}</div>
         <p className="card-insight">
           {node.status === "done"
@@ -79,28 +92,37 @@ function Card({ node, childCount, childrenGrowing, onOpen, onDrill }) {
             ? "searching…"
             : "pending…"}
         </p>
-        {node.status === "done" && (
-          <CoverageLine coverage={node.evidenceCoverage} />
-        )}
+        <div className="card-coverage-slot">
+          {node.status === "done" && (
+            <EvidenceSummary compact coverage={node.evidenceCoverage} />
+          )}
+        </div>
         <div className="card-badges">
           {verticals.map((v) => (
-            <span key={v} className={`src-badge src-${v}`}>
+            <Badge
+              key={v}
+              size="medium"
+              appearance="filled"
+              className={`src-badge src-${v}`}
+              style={{
+                backgroundColor: VERTICALS[v].color,
+                color: "#fff",
+              }}
+            >
               {VERTICALS[v].label}
-            </span>
+            </Badge>
           ))}
         </div>
         {childrenGrowing ? (
           <div className="card-growing">
-            <span className="card-growing-dots">
-              <span />
-              <span />
-              <span />
-            </span>
+            <Spinner size="tiny" />
             Growing sub-topics…
           </div>
         ) : (
-          <button
+          <Button
             type="button"
+            appearance="secondary"
+            size="medium"
             className="card-drill"
             disabled={!drillable}
             onClick={(e) => {
@@ -109,35 +131,35 @@ function Card({ node, childCount, childrenGrowing, onOpen, onDrill }) {
             }}
           >
             {drillLabel}
-          </button>
+          </Button>
         )}
       </div>
-    </div>
+    </FluentCard>
   );
 }
 
 function SkeletonCard({ i }) {
   // staggered shimmer so the cards feel alive, not a static block
   return (
-    <div className="card card-skeleton" style={{ animationDelay: `${i * 0.12}s` }}>
+    <FluentCard
+      appearance="outline"
+      className="card card-skeleton"
+      style={{ animationDelay: `${i * 0.12}s` }}
+    >
       <div className="card-image sk-shimmer" />
       <div className="card-body">
         <div className="sk-line sk-shimmer" style={{ width: "85%" }} />
         <div className="sk-line sk-shimmer" style={{ width: "70%" }} />
         <div className="sk-line sk-line--sm sk-shimmer" style={{ width: "40%" }} />
       </div>
-    </div>
+    </FluentCard>
   );
 }
 
 function GrowingLoader() {
   return (
     <div className="grow-loader">
-      <div className="grow-dots">
-        <span />
-        <span />
-        <span />
-      </div>
+      <Spinner size="tiny" />
       <span className="grow-text">Growing your knowledge tree…</span>
     </div>
   );
@@ -157,6 +179,38 @@ export default function CardView({
   if (!current) return <div className="cardview cardview-empty">Planning…</div>;
 
   const children = Object.values(nodes).filter((n) => n.parentId === current.id);
+  const completedChildren = children.filter((node) => node.status === "done");
+  const summarySourceCount = completedChildren.reduce(
+    (total, node) => total + (node.evidenceCoverage?.sourceCount ?? 0),
+    0
+  );
+  const summaryDomainCount = completedChildren.reduce(
+    (total, node) => total + (node.evidenceCoverage?.domainCount ?? 0),
+    0
+  );
+  const summaryCoverage = {
+    sourceCount: summarySourceCount,
+    domainCount: summaryDomainCount,
+    evidenceGaps: completedChildren.filter(
+      (node) =>
+        node.evidenceCoverage?.gaps?.noEvidence ??
+        !(node.sources || []).length
+    ).length,
+    gaps: {
+      singleDomain: summarySourceCount > 0 && summaryDomainCount === 1,
+    },
+  };
+  const currentVerticals = nodeVerticals(current);
+  const summaryAccent =
+    VERTICALS[currentVerticals[0]]?.color ||
+    VERTICALS[nodeVerticals(children[0] || {})[0]]?.color ||
+    "#0f6cbd";
+  const summaryText =
+    current.insight && current.status === "done"
+      ? current.insight
+      : loading
+      ? "ExploreTree is organizing the research branches and gathering evidence."
+      : "Explore the branches below to review the findings and supporting evidence.";
 
   return (
     <div className="cardview">
@@ -164,9 +218,18 @@ export default function CardView({
         <Breadcrumb trail={trail} onCrumb={onCrumb} />
         <div className="cardview-title">
           <h2>{capitalize(current.label)}</h2>
-          {current.insight && current.status === "done" && (
-            <p className="cardview-context">{current.insight}</p>
-          )}
+          <InsightSurface
+            label="Research summary"
+            accent={summaryAccent}
+            className="cardview-context"
+            footer={
+              completedChildren.length > 0 ? (
+                <EvidenceSummary coverage={summaryCoverage} />
+              ) : null
+            }
+          >
+            {summaryText}
+          </InsightSurface>
         </div>
 
         {children.length ? (
@@ -181,7 +244,7 @@ export default function CardView({
                 nodeStates[child.id] === "expanding" ||
                 (kids.length > 0 && kids.some((k) => k.status !== "done"));
               return (
-                <Card
+                <BranchCard
                   key={child.id}
                   node={child}
                   childCount={kids.length}

@@ -3,9 +3,15 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import { useApp, useHostStyles } from "@modelcontextprotocol/ext-apps/react";
+import {
+  FluentProvider,
+  webDarkTheme,
+  webLightTheme,
+} from "@fluentui/react-components";
 
 const McpBridgeContext = createContext(null);
 
@@ -59,6 +65,26 @@ export function McpBridgeProvider({ children }) {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  const fluentTheme = useMemo(
+    () => ({
+      ...(theme === "dark" ? webDarkTheme : webLightTheme),
+      colorNeutralBackground1: "var(--color-background-primary)",
+      colorNeutralBackground2: "var(--color-background-secondary)",
+      colorNeutralBackground3: "var(--color-background-tertiary)",
+      colorNeutralForeground1: "var(--color-text-primary)",
+      colorNeutralForeground2: "var(--color-text-secondary)",
+      colorNeutralForeground3: "var(--color-text-tertiary)",
+      colorNeutralStroke1: "var(--color-border-primary)",
+      colorNeutralStroke2: "var(--color-border-secondary)",
+      colorBrandBackground: "var(--et-brand)",
+      colorBrandBackgroundHover: "var(--et-brand-hover)",
+      colorBrandBackgroundPressed: "var(--et-brand-pressed)",
+      colorBrandForeground1: "var(--color-text-info)",
+      fontFamilyBase: "var(--font-sans)",
+    }),
+    [theme]
+  );
 
   const callTool = useCallback(
     async (name, args = {}) => {
@@ -153,23 +179,25 @@ export function McpBridgeProvider({ children }) {
     !!(app && isConnected && typeof app.requestDisplayMode === "function");
 
   return (
-    <McpBridgeContext.Provider
-      value={{
-        embedded,
-        toolData,
-        isConnected,
-        isFullscreen,
-        containerHeight,
-        canFullscreen,
-        callTool,
-        openExternal,
-        toggleFullscreen,
-        updateModelContext,
-        sendMessage,
-      }}
-    >
-      {children}
-    </McpBridgeContext.Provider>
+    <FluentProvider theme={fluentTheme} className="fluent-root">
+      <McpBridgeContext.Provider
+        value={{
+          embedded,
+          toolData,
+          isConnected,
+          isFullscreen,
+          containerHeight,
+          canFullscreen,
+          callTool,
+          openExternal,
+          toggleFullscreen,
+          updateModelContext,
+          sendMessage,
+        }}
+      >
+        {children}
+      </McpBridgeContext.Provider>
+    </FluentProvider>
   );
 }
 

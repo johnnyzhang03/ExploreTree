@@ -28,11 +28,8 @@ class FinanceResultParsingTests(unittest.TestCase):
         self.assertEqual(finance["type"], "stock")
         self.assertEqual(finance["symbol"], "000660")
         self.assertEqual(finance["changePercent"], -8.79)
-        self.assertEqual(finance["priceHistory"], [1718000, 1567000])
-        self.assertEqual(
-            finance["priceHistoryLabel"],
-            "Previous close to current price",
-        )
+        self.assertEqual(finance["previousClose"], 1718000)
+        self.assertNotIn("priceHistory", finance)
 
     def test_prefers_returned_chart_series_over_previous_close(self) -> None:
         _, finance = _parse_finance(

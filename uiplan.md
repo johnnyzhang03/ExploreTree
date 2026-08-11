@@ -12,10 +12,10 @@ Based on Microsoft's [User experience guidelines for MCP apps in declarative age
 
 ## 2. Adopt Fluent 2
 
-- Use the MCP Apps SDK's host-provided Fluent variables and fonts. The
-  organization package policy blocks installing the Fluent React package, so
-  controls remain dependency-free while following Fluent 2 behavior and visual
-  tokens.
+- Use Fluent UI React v9 components and icons from
+  `@fluentui/react-components` and `@fluentui/react-icons`.
+- Use the MCP Apps SDK's host-provided Fluent variables and fonts to align the
+  component theme with Microsoft 365 Copilot.
 - Use host-aware light and dark themes with local Fluent fallbacks.
 - Apply Fluent typography, spacing tokens, radii, focus styles, and 24px card padding.
 - Replace the current Google-style colors and custom controls.
@@ -25,6 +25,10 @@ Based on Microsoft's [User experience guidelines for MCP apps in declarative age
 - Make the research question and current state immediately clear.
 - Present structured progress and evidence coverage without duplicating Copilot's response.
 - Surface evidence gaps prominently but calmly.
+- Present summaries and findings in reusable Fluent insight surfaces with a
+  restrained accent rail, supporting icon, and source/domain metadata.
+- Use compact tinted insight wells in cards and a stronger "Key insight"
+  treatment in the detail panel without relying on decorative text colors.
 
 ## 4. Make every state explicit
 
@@ -39,6 +43,8 @@ Based on Microsoft's [User experience guidelines for MCP apps in declarative age
 - Preserve Cards and Map as contextual visualization controls.
 - Simplify the detail panel.
 - Prioritize insight, evidence, sources, then optional media and actions.
+- Separate detail sections with Fluent dividers so finance, sources, media, and
+  follow-up actions remain easy to scan.
 
 ## 6. Improve accessibility and responsive behavior
 

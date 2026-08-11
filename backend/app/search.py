@@ -284,18 +284,13 @@ def _parse_finance(item: dict) -> tuple[str, dict | None]:
                 )
                 if value is not None:
                     history.append(value)
-            if len(history) >= 2:
+            if len(history) >= 3:
                 finance_data["priceHistory"] = history
                 finance_data["priceHistoryLabel"] = "Price history"
 
         previous_close = inst.get("pricePreviousClose")
-        if (
-            "priceHistory" not in finance_data
-            and previous_close is not None
-            and price is not None
-        ):
-            finance_data["priceHistory"] = [previous_close, price]
-            finance_data["priceHistoryLabel"] = "Previous close to current price"
+        if previous_close is not None:
+            finance_data["previousClose"] = previous_close
 
         bits = []
         if price is not None:

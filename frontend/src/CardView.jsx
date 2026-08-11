@@ -8,6 +8,7 @@ import {
 } from "@fluentui/react-components";
 import { VERTICALS, nodeVerticals } from "./verticals.js";
 import { EvidenceSummary, InsightSurface } from "./InsightSurface.jsx";
+import EvidenceLens from "./EvidenceLens.jsx";
 
 const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
@@ -224,7 +225,10 @@ export default function CardView({
             className="cardview-context"
             footer={
               completedChildren.length > 0 ? (
-                <EvidenceSummary coverage={summaryCoverage} />
+                <EvidenceLens
+                  nodes={completedChildren}
+                  coverage={summaryCoverage}
+                />
               ) : null
             }
           >

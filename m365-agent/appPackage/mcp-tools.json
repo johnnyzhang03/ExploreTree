@@ -3,7 +3,7 @@
     {
       "name": "explore_tree",
       "title": "Explore a question",
-      "description": "MUST be called for every new valid user question or information-seeking request, including explicit questions, imperative requests, and short topic prompts. Use it even when the question is simple, casual, broad, underspecified, or does not use a research verb. If there is enough topic to begin, infer missing details instead of asking a clarifying question. Start an interactive sourced knowledge-tree investigation instead of answering from general knowledge. This returns before findings are available. After calling it, do not answer the research question or call any other tool in the same conversation turn. Set mode to 'compare' with at least two options when the user is weighing named alternatives; otherwise use 'explore'. Depth and breadth must each be between 1 and 4.",
+      "description": "MUST be called whenever the user asks to research, explore, investigate, assess, compare, or recommend about a substantive topic. Start an interactive sourced knowledge-tree investigation instead of answering from general knowledge. This returns before findings are available. After calling it, do not answer the research question or call any other tool in the same conversation turn. Set mode to 'compare' with at least two options when the user is weighing named alternatives; otherwise use 'explore'. Depth and breadth must each be between 1 and 4.",
       "inputSchema": {
         "type": "object",
         "properties": {

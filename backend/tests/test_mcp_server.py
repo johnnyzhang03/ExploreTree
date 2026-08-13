@@ -3,7 +3,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.mcp_server import _artifact_text, explore_tree, mcp
+from app.mcp_server import (
+    RESEARCH_RUNNING_RESPONSE,
+    RESEARCH_RUNNING_TOOL_RESULT,
+    _artifact_text,
+    explore_tree,
+    mcp,
+)
 from app.sessions import ExplorationSession, sessions
 
 
@@ -26,6 +32,10 @@ class ExploreTreeToolTests(unittest.IsolatedAsyncioTestCase):
         tool = next(item for item in tools if item.name == "explore_tree")
         properties = tool.inputSchema["properties"]
 
+        self.assertEqual(
+            properties["question"]["description"],
+            "The user's exact question, request, or topic, whether simple or complex.",
+        )
         self.assertEqual(properties["scope"]["anyOf"][0]["maxItems"], 8)
         self.assertEqual(properties["constraints"]["anyOf"][0]["maxItems"], 8)
         self.assertEqual(properties["options"]["anyOf"][0]["maxItems"], 4)
@@ -65,6 +75,11 @@ class ExploreTreeToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.structuredContent["status"], "running")
         self.assertEqual(result.structuredContent["nodes"], [])
         self.assertIsNone(result.structuredContent["comparison"])
+        self.assertEqual(result.content[0].text, RESEARCH_RUNNING_TOOL_RESULT)
+        self.assertIn("research is running", result.content[0].text)
+        self.assertIn("interactive workspace", result.content[0].text)
+        self.assertNotIn("respond with", result.content[0].text)
+        self.assertNotIn("Do not", result.content[0].text)
 
     async def test_results_tool_is_model_visible_without_widget_metadata(self) -> None:
         tools = await mcp.list_tools()
@@ -94,46 +109,34 @@ class ExploreTreeToolTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_explore_tool_declares_async_same_turn_boundary(self) -> None:
         tools = {tool.name: tool for tool in await mcp.list_tools()}
+        description = tools["explore_tree"].description
 
-        self.assertIn(
-            "MUST be called for every new valid user question",
-            tools["explore_tree"].description,
-        )
-        self.assertIn(
-            "instead of answering from general knowledge",
-            tools["explore_tree"].description,
-        )
-        self.assertIn(
-            "returns before any findings are available",
-            tools["explore_tree"].description,
-        )
-        self.assertIn(
-            "do not call any other tool in the same conversation turn",
-            tools["explore_tree"].description,
-        )
+        self.assertLessEqual(len(description), 1024)
+        self.assertIn("Use this tool whenever", description)
+        self.assertIn("instead of answering from model knowledge", description)
+        self.assertIn("returns before findings exist", description)
+        self.assertIn("end the tool sequence", description)
+        self.assertIn(RESEARCH_RUNNING_RESPONSE, description)
 
     async def test_explore_tool_includes_broad_question_triggers(self) -> None:
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         description = tools["explore_tree"].description
 
-        self.assertIn("simple, casual, broad, underspecified", description)
-        self.assertIn(
-            "infer missing details instead of asking a clarifying question",
-            description,
-        )
+        self.assertIn("factual question, explanation, how-to request", description)
+        self.assertIn("simple and complex requests", description)
+        self.assertIn("does not require the words explore or research", description)
 
     async def test_explore_tool_explains_when_to_choose_compare_mode(self) -> None:
         tools = {tool.name: tool for tool in await mcp.list_tools()}
 
         self.assertIn(
-            "Set mode to 'compare' when the user is weighing specific "
-            "alternatives against each other",
+            "Use compare mode when at least two alternatives are named",
             tools["explore_tree"].description,
         )
 
 
 class DeclarativeAgentInstructionTests(unittest.TestCase):
-    def test_every_valid_question_triggers_exploretree(self) -> None:
+    def test_proven_instruction_contract_routes_research_requests(self) -> None:
         instruction_path = (
             Path(__file__).resolve().parents[2]
             / "m365-agent"
@@ -142,20 +145,14 @@ class DeclarativeAgentInstructionTests(unittest.TestCase):
         )
         instructions = instruction_path.read_text(encoding="utf-8")
 
-        self.assertIn(
-            "every valid new information request",
-            instructions,
-        )
-        self.assertIn(
-            "Do not ask for optional details before starting research",
-            instructions,
-        )
-        self.assertIn(
-            "Briefly ask what the user wants to explore",
-            instructions,
-        )
+        self.assertLessEqual(len(instructions), 8000)
+        self.assertIn("you MUST call `explore_tree`", instructions)
+        self.assertIn("# New Research Workflow", instructions)
+        self.assertIn("# Existing Session Workflow", instructions)
+        self.assertIn("End the tool sequence immediately", instructions)
+        self.assertIn(RESEARCH_RUNNING_RESPONSE, instructions)
 
-    def test_user_visible_action_description_has_no_internal_directives(self) -> None:
+    def test_function_description_restores_proven_trigger_language(self) -> None:
         plugin_path = (
             Path(__file__).resolve().parents[2]
             / "m365-agent"
@@ -169,15 +166,13 @@ class DeclarativeAgentInstructionTests(unittest.TestCase):
             if function["name"] == "explore_tree"
         )
 
-        self.assertEqual(
-            explore["description"],
-            "Start an interactive, sourced ExploreTree investigation for the "
-            "user's question.",
-        )
-        for internal_directive in ("MUST", "do not answer", "same conversation turn"):
-            self.assertNotIn(internal_directive, explore["description"])
+        self.assertLessEqual(len(explore["description"]), 1024)
+        self.assertTrue(explore["description"].startswith("MUST be called whenever"))
+        self.assertIn("research, explore, investigate", explore["description"])
+        self.assertIn("instead of answering from general knowledge", explore["description"])
+        self.assertNotIn("states", explore)
 
-    def test_agent_discourages_direct_answers_from_model_knowledge(self) -> None:
+    def test_agent_uses_last_known_working_contract(self) -> None:
         manifest_path = (
             Path(__file__).resolve().parents[2]
             / "m365-agent"
@@ -186,65 +181,64 @@ class DeclarativeAgentInstructionTests(unittest.TestCase):
         )
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "v1.8")
+        self.assertEqual(manifest["version"], "v1.5")
+        self.assertEqual(manifest["instructions"], "$[file('instruction.md')]")
+        self.assertNotIn("behavior_overrides", manifest)
+
+    def test_plugin_uses_plain_function_metadata_without_states(self) -> None:
+        plugin_path = (
+            Path(__file__).resolve().parents[2]
+            / "m365-agent"
+            / "appPackage"
+            / "ai-plugin.json"
+        )
+        plugin = json.loads(plugin_path.read_text(encoding="utf-8"))
+        explore = next(
+            function
+            for function in plugin["functions"]
+            if function["name"] == "explore_tree"
+        )
+
+        self.assertNotIn("description_for_model", plugin)
+        self.assertNotIn("states", explore)
+        self.assertIn("do not answer the research question", explore["description"])
+        self.assertIn("or call any other tool", explore["description"])
+
+    def test_package_restores_explicit_demo_triggers(self) -> None:
+        package_root = (
+            Path(__file__).resolve().parents[2]
+            / "m365-agent"
+            / "appPackage"
+        )
+        manifest = json.loads(
+            (package_root / "manifest.json").read_text(encoding="utf-8")
+        )
+        agent = json.loads(
+            (package_root / "declarativeAgent.json").read_text(encoding="utf-8")
+        )
+        tools = json.loads(
+            (package_root / "mcp-tools.json").read_text(encoding="utf-8")
+        )
+        explore = next(tool for tool in tools["tools"] if tool["name"] == "explore_tree")
+
+        self.assertEqual(manifest["version"], "0.3.17")
+        self.assertIn("complex questions", manifest["description"]["short"])
+        self.assertEqual(
+            explore["inputSchema"]["properties"]["question"]["description"],
+            "The complex question to research.",
+        )
         self.assertTrue(
-            manifest["behavior_overrides"]["special_instructions"][
-                "discourage_model_knowledge"
-            ]
+            all(
+                starter["text"].casefold().startswith("explore ")
+                for starter in agent["conversation_starters"]
+            )
         )
-
-    def test_responding_state_blocks_a_post_tool_answer(self) -> None:
-        plugin_path = (
-            Path(__file__).resolve().parents[2]
-            / "m365-agent"
-            / "appPackage"
-            / "ai-plugin.json"
+        self.assertTrue(
+            any(
+                "boba tea shop in beijing" in starter["text"].casefold()
+                for starter in agent["conversation_starters"]
+            )
         )
-        plugin = json.loads(plugin_path.read_text(encoding="utf-8"))
-        explore = next(
-            function
-            for function in plugin["functions"]
-            if function["name"] == "explore_tree"
-        )
-        instructions = explore["states"]["responding"]["instructions"]
-
-        self.assertIn("respond only with one short sentence", instructions)
-        self.assertIn("Do not answer, summarize, analyze, or discuss", instructions)
-        self.assertIn("Wait for a later user message", instructions)
-
-    def test_model_only_routing_requires_all_questions_to_call_tool(self) -> None:
-        plugin_path = (
-            Path(__file__).resolve().parents[2]
-            / "m365-agent"
-            / "appPackage"
-            / "ai-plugin.json"
-        )
-        plugin = json.loads(plugin_path.read_text(encoding="utf-8"))
-        explore = next(
-            function
-            for function in plugin["functions"]
-            if function["name"] == "explore_tree"
-        )
-        reasoning = explore["states"]["reasoning"]
-
-        self.assertIn(
-            "mandatory action for every new valid user question",
-            plugin["description_for_model"],
-        )
-        self.assertIn(
-            "Use this function for every new valid user question",
-            reasoning["description"],
-        )
-        self.assertIn(
-            "There is no minimum complexity or topic restriction",
-            reasoning["instructions"][0],
-        )
-        self.assertIn(
-            "Comparison is only one supported question type, not the trigger boundary",
-            reasoning["instructions"][1],
-        )
-        self.assertNotIn("examples", reasoning)
-
 
 class ComparisonArtifactTextTests(unittest.TestCase):
     def _artifact(self, unfilled):

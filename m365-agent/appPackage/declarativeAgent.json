@@ -1,14 +1,9 @@
 {
-  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.8/schema.json",
-  "version": "v1.8",
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.5/schema.json",
+  "version": "v1.5",
   "name": "ExploreTree${{APP_NAME_SUFFIX}}",
-  "description": "Use ExploreTree for every valid question and present the findings as a sourced, interactive knowledge tree.",
+  "description": "Use ExploreTree for substantive research requests and present the findings as a sourced, interactive knowledge tree.",
   "instructions": "$[file('instruction.md')]",
-  "behavior_overrides": {
-    "special_instructions": {
-      "discourage_model_knowledge": true
-    }
-  },
   "conversation_starters": [
     {
       "title": "Explore a technology trend",
@@ -19,8 +14,8 @@
       "text": "Explore the tradeoffs between building and buying an enterprise AI platform."
     },
     {
-      "title": "Research a market",
-      "text": "Explore the current state, major participants, and risks in the humanoid robotics market."
+      "title": "Choose a boba tea location",
+      "text": "Explore where I should open a boba tea shop in Beijing."
     }
   ],
   "actions": [

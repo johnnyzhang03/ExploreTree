@@ -11,7 +11,7 @@ tree in real time — while you watch it work and steer where it goes next.
 
 Unlike black-box research agents that only hand you a final report, **the tree *is* the reasoning process**: every node shows its insight, its sources, and how it was reached.
 
-> Full vision in [docs/proposal.md](docs/proposal.md); roadmap and weekly plan in [docs/plan.md](docs/plan.md).
+> Full vision in [docs/proposal.md](docs/proposal.md).
 
 <p align="center"><em>Live tree growth from a question</em></p>
 
@@ -90,7 +90,7 @@ frontend/src/
   Tree.jsx      D3 tree "map" rendering, animations, pan/zoom, click handling
   verticals.js  shared per-vertical labels/colors (used by cards + tree)
   styles.css    styling
-docs/         proposal.md · plan.md · DEPLOY.md
+docs/         proposal.md · DEPLOY.md
 m365-agent/
   appPackage/      Teams manifest, declarative agent, plugin, instructions
   build-package.ps1 development sideload-package builder

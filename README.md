@@ -201,21 +201,73 @@ The app runs as a **single service** — FastAPI serves the built frontend and t
 
 ### Add to Microsoft 365 Copilot
 
-After deploying to a public HTTPS origin, install Microsoft 365 Agents Toolkit
-6.12 or later and ensure custom app upload is enabled for your tenant. Build a
-development package from the repository root:
+Use a Microsoft 365 account that has access to Copilot and belongs to a tenant
+where custom app upload is enabled. ExploreTree must already be deployed at a
+public HTTPS origin; Copilot cannot call a server running on `localhost`.
+
+#### 1. Build the agent package
+
+From the repository root, run:
+
+```powershell
+$TeamsAppId = [guid]::NewGuid().ToString()
+
+.\m365-agent\build-package.ps1 `
+  -McpServerUrl "https://<your-app>.azurewebsites.net" `
+  -TeamsAppId $TeamsAppId `
+  -PublisherEmail "publisher@example.com"
+```
+
+This creates `m365-agent\build\ExploreTree.dev.zip`. The script injects the MCP
+origin, Teams app ID, ` dev` name suffix, and publisher email. Record
+`$TeamsAppId` with the handoff notes because future package updates must reuse
+it.
+
+#### 2. Upload it for personal testing
+
+1. Sign in to the Microsoft Teams desktop or web client with the same account
+   used for Microsoft 365 Copilot.
+2. Go to **Apps** > **Manage your apps** > **Upload an app** >
+   **Upload a custom app**.
+3. Select `m365-agent\build\ExploreTree.dev.zip`, then select **Add**.
+4. Open [Microsoft 365 Copilot](https://m365.cloud.microsoft/chat). Next to
+   **New Chat**, open the conversation drawer and select **ExploreTree dev**.
+5. Try a conversation starter or ask a research question. A successful test
+   calls `explore_tree` and displays the interactive tree while research
+   results arrive.
+
+If **Upload a custom app** is unavailable, a Teams administrator must enable
+**Teams apps** > **Setup policies** > **Global (Org-wide default)** >
+**Upload custom apps** in the
+[Teams admin center](https://admin.teams.microsoft.com/). For a controlled
+multi-user test, an administrator can instead use
+[Microsoft 365 admin center](https://admin.microsoft.com/) >
+**Copilot Control System** > **Agents** > **Upload custom agent**, upload the
+same ZIP, and assign it to **Just me** or a test group.
+
+#### 3. Update an existing test installation
+
+Changes under `m365-agent\appPackage` require rebuilding and uploading a new
+ZIP. Increment `version` in `m365-agent\appPackage\manifest.json` and pass the
+same app ID used for the previous package:
 
 ```powershell
 .\m365-agent\build-package.ps1 `
   -McpServerUrl "https://<your-app>.azurewebsites.net" `
+  -TeamsAppId "<existing-teams-app-id>" `
   -PublisherEmail "publisher@example.com"
 ```
 
-Upload `m365-agent\build\ExploreTree.dev.zip` as a custom app in Microsoft 365.
-The builder injects the MCP origin, a Teams app ID, the development name suffix,
-and publisher email into the package. The included development manifest uses
-anonymous MCP authentication; add Entra SSO or OAuth 2.1 and bind research
-sessions to authenticated users before production distribution.
+Using a new app ID creates a second agent instead of updating the installed
+one. Backend-only or frontend-only deployments do not require another package
+upload unless the public MCP origin changes.
+
+The development package uses anonymous MCP authentication. Before production
+distribution, add Entra SSO or OAuth 2.1 and bind research sessions to
+authenticated users. See Microsoft's guidance for
+[sideloading agents](https://learn.microsoft.com/en-us/microsoft-365/copilot/agent-essentials/agent-policies/agent-sideload)
+and
+[uploading custom agents](https://learn.microsoft.com/en-us/microsoft-365/copilot/agent-essentials/agent-lifecycle/agent-upload-agents).
 
 ### Tests
 
